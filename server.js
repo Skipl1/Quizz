@@ -605,7 +605,20 @@ function sendNextQuestionToPlayer(playerId, quiz) {
   );
 
   if (nextIndex === undefined) {
-    io.to(playerId).emit("player-quiz-ended", { score: player.score });
+    const playerScore = player.score;
+    const totalQuestions = quiz.questions.length;
+    const answeredCount = player.answeredQuestions.length;
+    const percentage = Math.round((answeredCount / totalQuestions) * 100);
+
+    io.to(playerId).emit("player-quiz-ended", {
+      score: playerScore,
+      totalQuestions,
+      answeredCount,
+      percentage,
+    });
+
+    // Проверка: все ли игроки завершили
+    checkAllPlayersFinished(quiz);
     return;
   }
 
@@ -634,8 +647,36 @@ function getLeaderboard() {
       name: data.name,
       score: data.score,
       answered: data.answeredQuestions.length,
+      totalQuestions: data.questionsQueue.length,
+      percentage:
+        data.questionsQueue.length > 0
+          ? Math.round(
+              (data.answeredQuestions.length / data.questionsQueue.length) *
+                100,
+            )
+          : 0,
     }))
     .sort((a, b) => b.score - a.score);
+}
+
+// Проверка: все ли игроки завершили викторину
+function checkAllPlayersFinished(quiz) {
+  const activePlayers = Object.values(players);
+  if (activePlayers.length === 0) return;
+
+  const allFinished = activePlayers.every(
+    (p) => p.answeredQuestions.length >= quiz.questions.length,
+  );
+
+  if (allFinished) {
+    // Отправляем админу уведомление и результаты
+    const leaderboard = getLeaderboard();
+    io.emit("all-players-finished", {
+      leaderboard,
+      totalQuestions: quiz.questions.length,
+    });
+    console.log("Все игроки завершили викторину!");
+  }
 }
 
 // Отправить обновление рейтинга всем

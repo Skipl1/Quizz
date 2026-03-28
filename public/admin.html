@@ -633,10 +633,17 @@
               </div>
               <div
                 class="question-type"
-                data-type="open_ended"
-                onclick="selectQuestionType('open_ended')"
+                data-type="ordering"
+                onclick="selectQuestionType('ordering')"
               >
-                <span class="icon">📝</span> Открытый вопрос
+                <span class="icon">🔢</span> Изменение порядка
+              </div>
+              <div
+                class="question-type"
+                data-type="matching"
+                onclick="selectQuestionType('matching')"
+              >
+                <span class="icon">🔗</span> Соответствовать
               </div>
             </div>
 
@@ -751,6 +758,187 @@
                   border-radius: 8px;
                 "
               />
+            </div>
+
+            <!-- Ordering -->
+            <div id="ordering-editor" class="hidden">
+              <h4 style="margin-bottom: 10px">
+                Элементы для сортировки (укажите правильный порядок):
+              </h4>
+              <div class="answers-grid" id="ordering-container">
+                <div class="answer-card blue">
+                  <textarea placeholder="Элемент 1"></textarea>
+                  <div class="card-tools">
+                    <button onclick="removeOrderingAnswer(this)">🗑️</button>
+                    <span style="color: white; font-size: 0.8rem"
+                      >Позиция 1</span
+                    >
+                  </div>
+                </div>
+                <div class="answer-card green">
+                  <textarea placeholder="Элемент 2"></textarea>
+                  <div class="card-tools">
+                    <button onclick="removeOrderingAnswer(this)">🗑️</button>
+                    <span style="color: white; font-size: 0.8rem"
+                      >Позиция 2</span
+                    >
+                  </div>
+                </div>
+                <div class="answer-card yellow">
+                  <textarea placeholder="Элемент 3"></textarea>
+                  <div class="card-tools">
+                    <button onclick="removeOrderingAnswer(this)">🗑️</button>
+                    <span style="color: white; font-size: 0.8rem"
+                      >Позиция 3</span
+                    >
+                  </div>
+                </div>
+                <div class="answer-card red">
+                  <textarea placeholder="Элемент 4"></textarea>
+                  <div class="card-tools">
+                    <button onclick="removeOrderingAnswer(this)">🗑️</button>
+                    <span style="color: white; font-size: 0.8rem"
+                      >Позиция 4</span
+                    >
+                  </div>
+                </div>
+                <div class="add-answer-btn" onclick="addOrderingAnswer()">
+                  +
+                </div>
+              </div>
+            </div>
+
+            <!-- Matching -->
+            <div id="matching-editor" class="hidden">
+              <h4 style="margin-bottom: 10px">Пары для сопоставления:</h4>
+              <div
+                id="matching-container"
+                style="display: flex; flex-direction: column; gap: 15px"
+              >
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                    align-items: center;
+                  "
+                >
+                  <input
+                    type="text"
+                    class="matching-left"
+                    placeholder="Вопрос 1"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                  <input
+                    type="text"
+                    class="matching-right"
+                    placeholder="Ответ 1"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                </div>
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                    align-items: center;
+                  "
+                >
+                  <input
+                    type="text"
+                    class="matching-left"
+                    placeholder="Вопрос 2"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                  <input
+                    type="text"
+                    class="matching-right"
+                    placeholder="Ответ 2"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                </div>
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                    align-items: center;
+                  "
+                >
+                  <input
+                    type="text"
+                    class="matching-left"
+                    placeholder="Вопрос 3"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                  <input
+                    type="text"
+                    class="matching-right"
+                    placeholder="Ответ 3"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                </div>
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                    align-items: center;
+                  "
+                >
+                  <input
+                    type="text"
+                    class="matching-left"
+                    placeholder="Вопрос 4"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                  <input
+                    type="text"
+                    class="matching-right"
+                    placeholder="Ответ 4"
+                    style="
+                      padding: 10px;
+                      border: 2px solid #ddd;
+                      border-radius: 8px;
+                    "
+                  />
+                </div>
+              </div>
+              <button
+                class="btn btn-secondary btn-small"
+                onclick="addMatchingPair()"
+                style="margin-top: 15px"
+              >
+                + Добавить пару
+              </button>
             </div>
 
             <!-- Время -->
@@ -956,12 +1144,16 @@
           .querySelector(`.question-type[data-type="${type}"]`)
           .classList.add("selected");
 
+        // Скрыть все редакторы
         document
           .getElementById("multiple-choice-editor")
           .classList.add("hidden");
         document.getElementById("true-false-editor").classList.add("hidden");
         document.getElementById("text-answer-editor").classList.add("hidden");
+        document.getElementById("ordering-editor").classList.add("hidden");
+        document.getElementById("matching-editor").classList.add("hidden");
 
+        // Показать нужный
         if (type === "multiple_choice") {
           document
             .getElementById("multiple-choice-editor")
@@ -970,10 +1162,14 @@
           document
             .getElementById("true-false-editor")
             .classList.remove("hidden");
-        } else {
+        } else if (type === "fill_blank" || type === "open_ended") {
           document
             .getElementById("text-answer-editor")
             .classList.remove("hidden");
+        } else if (type === "ordering") {
+          document.getElementById("ordering-editor").classList.remove("hidden");
+        } else if (type === "matching") {
+          document.getElementById("matching-editor").classList.remove("hidden");
         }
       }
 
@@ -1028,6 +1224,53 @@
         if (selectedQuestionType === "multiple_choice") {
           btn.classList.toggle("checked");
         }
+      }
+
+      // Ordering
+      function addOrderingAnswer() {
+        const container = document.getElementById("ordering-container");
+        const addBtn = container.querySelector(".add-answer-btn");
+        const index = container.querySelectorAll(".answer-card").length;
+        const color = answerColors[index % answerColors.length];
+
+        const card = document.createElement("div");
+        card.className = `answer-card ${color}`;
+        card.innerHTML = `
+        <textarea placeholder="Элемент ${index + 1}"></textarea>
+        <div class="card-tools">
+          <button onclick="removeOrderingAnswer(this)">🗑️</button>
+          <span style="color:white;font-size:0.8rem;">Позиция ${index + 1}</span>
+        </div>
+      `;
+        container.insertBefore(card, addBtn);
+      }
+
+      function removeOrderingAnswer(btn) {
+        const card = btn.closest(".answer-card");
+        const container = document.getElementById("ordering-container");
+        if (container.querySelectorAll(".answer-card").length > 2) {
+          card.remove();
+          // Обновить позиции
+          container.querySelectorAll(".answer-card").forEach((c, i) => {
+            c.querySelector(".card-tools span").textContent =
+              `Позиция ${i + 1}`;
+          });
+        } else {
+          alert("Минимум 2 элемента!");
+        }
+      }
+
+      // Matching
+      function addMatchingPair() {
+        const container = document.getElementById("matching-container");
+        const pair = document.createElement("div");
+        pair.style.cssText =
+          "display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;";
+        pair.innerHTML = `
+          <input type="text" class="matching-left" placeholder="Вопрос" style="padding:10px;border:2px solid #ddd;border-radius:8px;">
+          <input type="text" class="matching-right" placeholder="Ответ" style="padding:10px;border:2px solid #ddd;border-radius:8px;">
+        `;
+        container.appendChild(pair);
       }
 
       // Image
@@ -1124,7 +1367,10 @@
             return;
           }
           correct = [tfSelected];
-        } else {
+        } else if (
+          selectedQuestionType === "fill_blank" ||
+          selectedQuestionType === "open_ended"
+        ) {
           const answer = document
             .getElementById("correct-answer-text")
             .value.trim();
@@ -1134,6 +1380,39 @@
           }
           options = [answer];
           correct = [0];
+        } else if (selectedQuestionType === "ordering") {
+          const cards = document.querySelectorAll(
+            "#ordering-container .answer-card",
+          );
+          cards.forEach((card) => {
+            const textarea = card.querySelector("textarea");
+            if (textarea.value.trim()) {
+              options.push(textarea.value.trim());
+            }
+          });
+          if (options.length < 2) {
+            alert("Минимум 2 элемента для сортировки");
+            return;
+          }
+          // Правильный порядок - это индексы по порядку [0, 1, 2, ...]
+          correct = options.map((_, i) => i);
+        } else if (selectedQuestionType === "matching") {
+          const leftInputs = document.querySelectorAll(".matching-left");
+          const rightInputs = document.querySelectorAll(".matching-right");
+          leftInputs.forEach((input, i) => {
+            if (input.value.trim() && rightInputs[i].value.trim()) {
+              options.push({
+                left: input.value.trim(),
+                right: rightInputs[i].value.trim(),
+              });
+            }
+          });
+          if (options.length < 2) {
+            alert("Минимум 2 пары для сопоставления");
+            return;
+          }
+          // Правильные пары - индексы по порядку
+          correct = options.map((_, i) => i);
         }
 
         socket.emit("add-question", {
@@ -1305,10 +1584,38 @@
           <span class="rank">#${i + 1}</span>
           <span class="name">${escapeHtml(p.name)}</span>
           <span class="score">${p.score} бал.</span>
+          <span style="color:#999;font-size:0.85rem;margin-left:10px;">${p.percentage}%</span>
         </div>
       `,
           )
           .join("");
+      });
+
+      // Все игроки завершили викторину
+      socket.on("all-players-finished", (data) => {
+        const container = document.getElementById("leaderboard");
+        container.innerHTML = `
+          <div style="background:#d4edda;color:#155724;padding:20px;border-radius:10px;margin-bottom:15px;">
+            <strong>✅ Все игроки завершили викторину!</strong>
+          </div>
+          <button class="btn btn-success btn-full" onclick="downloadResults()" style="margin-bottom:15px;">
+            💾 Сохранить результаты (CSV)
+          </button>
+          ${data.leaderboard
+            .map(
+              (p, i) => `
+            <div class="leaderboard-item">
+              <span class="rank">#${i + 1}</span>
+              <span class="name">${escapeHtml(p.name)}</span>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <span class="score">${p.score} бал.</span>
+                <span style="background:#667eea;color:white;padding:3px 10px;border-radius:10px;font-size:0.85rem;">${p.percentage}%</span>
+              </div>
+            </div>
+          `,
+            )
+            .join("")}
+        `;
       });
 
       // Обновление количества игроков (live)
@@ -1323,6 +1630,34 @@
         div.textContent = text;
         return div.innerHTML;
       }
+
+      // Сохранение результатов в CSV
+      function downloadResults() {
+        socket.emit("get-final-leaderboard");
+      }
+
+      socket.on("final-leaderboard", (leaderboard) => {
+        const quizName =
+          document.getElementById("current-quiz-name").textContent ||
+          "Викторина";
+        const timestamp = new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/:/g, "-");
+
+        let csv = "Место,Игрок,Баллы,Процент,Вопросов решено\n";
+        leaderboard.forEach((p, i) => {
+          csv += `${i + 1},"${p.name}",${p.score},${p.percentage}%,${p.answered}\n`;
+        });
+
+        const blob = new Blob(["\ufeff" + csv], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${quizName}_${timestamp}.csv`;
+        link.click();
+      });
 
       // Проверка сессии при загрузке
       checkAdminSession();
