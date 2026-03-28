@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const { Pool } = require("pg");
 
 const app = express();
 const server = http.createServer(app);
@@ -16,59 +17,126 @@ const ADMIN_CREDENTIALS = {
   password: "admin123",
 };
 
-// База данных в оперативной памяти
-let quizzes = []; // Массив викторин
-let currentQuizId = null; // Текущая активная викторина
-let quizStarted = false; // Флаг: викторина запущена
-const QUESTION_TIME = 30; // Время на вопрос в секундах
-const players = {}; // { socketId: { name, score, questionsQueue, currentQuestion, answeredQuestions } }
-const adminSessions = {}; // { socketId: true } - авторизованные админы
+// Подключение к PostgreSQL (Render автоматически предоставляет DATABASE_URL)
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    })
+  : null;
 
-// Тестовая викторина по умолчанию
-quizzes.push({
-  id: "default",
-  name: "Тестовая викторина",
-  questions: [
-    {
-      text: "Столица Франции?",
-      options: ["Лондон", "Берлин", "Париж", "Мадрид"],
-      correct: 2,
-      image: null,
-    },
-    {
-      text: "Сколько планет в Солнечной системе?",
-      options: ["7", "8", "9", "10"],
-      correct: 1,
-      image: null,
-    },
-    {
-      text: "Химическая формула воды?",
-      options: ["CO2", "H2O", "O2", "NaCl"],
-      correct: 1,
-      image: null,
-    },
-    {
-      text: "Кто написал «Войну и мир»?",
-      options: ["Достоевский", "Чехов", "Толстой", "Пушкин"],
-      correct: 2,
-      image: null,
-    },
-    {
-      text: "Самая длинная река в мире?",
-      options: ["Нил", "Амазонка", "Янцзы", "Миссисипи"],
-      correct: 1,
-      image: null,
-    },
-    {
-      text: "В каком году Гагарин полетел в космос?",
-      options: ["1959", "1961", "1963", "1965"],
-      correct: 1,
-      image: null,
-    },
-  ],
-});
+// База данных в оперативной памяти (если нет БД)
+let quizzes = [];
+let currentQuizId = null;
+let quizStarted = false;
+const QUESTION_TIME = 30;
+const players = {};
+const adminSessions = {};
 
-// Перемешивание массива (алгоритм Фишера-Йетса)
+// Инициализация БД
+async function initDatabase() {
+  if (!pool) {
+    console.log("⚠️ База данных не подключена. Работа в режиме RAM.");
+    // Тестовая викторина
+    quizzes.push({
+      id: "default",
+      name: "Тестовая викторина",
+      questions: [
+        {
+          text: "Столица Франции?",
+          type: "multiple_choice",
+          options: ["Лондон", "Берлин", "Париж", "Мадрид"],
+          correct: [2],
+          image: null,
+        },
+        {
+          text: "Сколько планет в Солнечной системе?",
+          type: "multiple_choice",
+          options: ["7", "8", "9", "10"],
+          correct: [1],
+          image: null,
+        },
+        {
+          text: "H2O — это формула воды",
+          type: "true_false",
+          options: ["Правда", "Ложь"],
+          correct: [0],
+          image: null,
+        },
+        {
+          text: "Кто написал «Войну и мир»?",
+          type: "multiple_choice",
+          options: ["Достоевский", "Чехов", "Толстой", "Пушкин"],
+          correct: [2],
+          image: null,
+        },
+      ],
+    });
+    return;
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS quizzes (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS questions (
+        id SERIAL PRIMARY KEY,
+        quiz_id INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+        text TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'multiple_choice',
+        options JSONB,
+        correct JSONB,
+        image TEXT,
+        order_index INTEGER DEFAULT 0
+      )
+    `);
+    console.log("✅ База данных подключена и готова.");
+
+    // Загрузка викторин из БД
+    await loadQuizzesFromDB();
+  } catch (err) {
+    console.error("❌ Ошибка БД:", err.message);
+  }
+}
+
+async function loadQuizzesFromDB() {
+  if (!pool) return;
+  try {
+    const result = await pool.query(
+      "SELECT * FROM quizzes ORDER BY created_at DESC",
+    );
+    for (const row of result.rows) {
+      const qResult = await pool.query(
+        "SELECT * FROM questions WHERE quiz_id = $1 ORDER BY order_index",
+        [row.id],
+      );
+      quizzes.push({
+        id: `db-${row.id}`,
+        dbId: row.id,
+        name: row.name,
+        questions: qResult.rows.map((q) => ({
+          id: q.id,
+          text: q.text,
+          type: q.type,
+          options: q.options || [],
+          correct: q.correct || [],
+          image: q.image,
+          orderIndex: q.order_index,
+        })),
+      });
+    }
+    console.log(`📚 Загружено викторин: ${quizzes.length}`);
+  } catch (err) {
+    console.error("Ошибка загрузки викторин:", err.message);
+  }
+}
+
+// Перемешивание массива
 function shuffleArray(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -83,7 +151,6 @@ io.on("connection", (socket) => {
 
   // === АДМИН ===
 
-  // Вход админа
   socket.on("admin-login", (data, callback) => {
     if (
       data.login === ADMIN_CREDENTIALS.login &&
@@ -97,7 +164,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Получить все викторины
   socket.on("get-quizzes", () => {
     if (!adminSessions[socket.id]) return;
     socket.emit(
@@ -110,43 +176,92 @@ io.on("connection", (socket) => {
     );
   });
 
-  // Создать новую викторину
-  socket.on("create-quiz", (data) => {
+  // Создать викторину
+  socket.on("create-quiz", async (data) => {
     if (!adminSessions[socket.id]) return;
 
-    const newQuiz = {
-      id: "quiz-" + Date.now(),
-      name: data.name || "Новая викторина",
-      questions: [],
-    };
-    quizzes.push(newQuiz);
-
-    socket.emit("quiz-created", { id: newQuiz.id, name: newQuiz.name });
-    socket.emit(
-      "quizzes-list",
-      quizzes.map((q) => ({
-        id: q.id,
-        name: q.name,
-        questionsCount: q.questions.length,
-      })),
-    );
-    console.log(`Создана викторина: ${newQuiz.name}`);
+    if (pool) {
+      try {
+        const result = await pool.query(
+          "INSERT INTO quizzes (name) VALUES ($1) RETURNING id",
+          [data.name || "Новая викторина"],
+        );
+        const newQuiz = {
+          id: `db-${result.rows[0].id}`,
+          dbId: result.rows[0].id,
+          name: data.name || "Новая викторина",
+          questions: [],
+        };
+        quizzes.push(newQuiz);
+        socket.emit("quiz-created", { id: newQuiz.id, name: newQuiz.name });
+        socket.emit(
+          "quizzes-list",
+          quizzes.map((q) => ({
+            id: q.id,
+            name: q.name,
+            questionsCount: q.questions.length,
+          })),
+        );
+      } catch (err) {
+        console.error("Ошибка создания викторины:", err.message);
+      }
+    } else {
+      const newQuiz = {
+        id: "quiz-" + Date.now(),
+        name: data.name || "Новая викторина",
+        questions: [],
+      };
+      quizzes.push(newQuiz);
+      socket.emit("quiz-created", { id: newQuiz.id, name: newQuiz.name });
+      socket.emit(
+        "quizzes-list",
+        quizzes.map((q) => ({
+          id: q.id,
+          name: q.name,
+          questionsCount: q.questions.length,
+        })),
+      );
+    }
   });
 
-  // Добавить вопрос в викторину
-  socket.on("add-question", (data) => {
+  // Добавить вопрос
+  socket.on("add-question", async (data) => {
     if (!adminSessions[socket.id]) return;
 
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz) return;
 
-    quiz.questions.push({
+    const questionData = {
       text: data.text,
+      type: data.type || "multiple_choice",
       options: data.options,
       correct: data.correct,
       image: data.image || null,
-    });
+      timeLimit: data.timeLimit || QUESTION_TIME,
+    };
 
+    if (pool && quiz.dbId) {
+      try {
+        const orderIndex = quiz.questions.length;
+        await pool.query(
+          "INSERT INTO questions (quiz_id, text, type, options, correct, image, order_index) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          [
+            quiz.dbId,
+            data.text,
+            data.type || "multiple_choice",
+            JSON.stringify(data.options),
+            JSON.stringify(data.correct),
+            data.image || null,
+            orderIndex,
+          ],
+        );
+        questionData.orderIndex = orderIndex;
+      } catch (err) {
+        console.error("Ошибка добавления вопроса:", err.message);
+      }
+    }
+
+    quiz.questions.push(questionData);
     socket.emit("question-added", {
       quizId: quiz.id,
       questionIndex: quiz.questions.length - 1,
@@ -159,18 +274,23 @@ io.on("connection", (socket) => {
         questionsCount: q.questions.length,
       })),
     );
-    console.log(`Добавлен вопрос в викторину: ${quiz.name}`);
   });
 
   // Удалить вопрос
-  socket.on("delete-question", (data) => {
+  socket.on("delete-question", async (data) => {
     if (!adminSessions[socket.id]) return;
 
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz || !quiz.questions[data.questionIndex]) return;
 
-    quiz.questions.splice(data.questionIndex, 1);
+    if (pool && quiz.dbId) {
+      const q = quiz.questions[data.questionIndex];
+      if (q.id) {
+        await pool.query("DELETE FROM questions WHERE id = $1", [q.id]);
+      }
+    }
 
+    quiz.questions.splice(data.questionIndex, 1);
     socket.emit(
       "quizzes-list",
       quizzes.map((q) => ({
@@ -182,7 +302,31 @@ io.on("connection", (socket) => {
     socket.emit("quiz-updated", { quizId: quiz.id, questions: quiz.questions });
   });
 
-  // Выбрать викторину для игры
+  // Удалить викторину
+  socket.on("delete-quiz", async (quizId) => {
+    if (!adminSessions[socket.id]) return;
+
+    const quizIndex = quizzes.findIndex((q) => q.id === quizId);
+    if (quizIndex === -1) return;
+
+    const quiz = quizzes[quizIndex];
+
+    if (pool && quiz.dbId) {
+      await pool.query("DELETE FROM quizzes WHERE id = $1", [quiz.dbId]);
+    }
+
+    quizzes.splice(quizIndex, 1);
+    socket.emit(
+      "quizzes-list",
+      quizzes.map((q) => ({
+        id: q.id,
+        name: q.name,
+        questionsCount: q.questions.length,
+      })),
+    );
+  });
+
+  // Выбрать викторину
   socket.on("select-quiz", (quizId) => {
     if (!adminSessions[socket.id]) return;
 
@@ -192,7 +336,6 @@ io.on("connection", (socket) => {
     currentQuizId = quizId;
     quizStarted = false;
 
-    // Инициализируем вопросы для всех текущих игроков
     for (const id in players) {
       initPlayerQuestions(id, quiz);
     }
@@ -206,17 +349,14 @@ io.on("connection", (socket) => {
     console.log(`Выбрана викторина: ${quiz.name}`);
   });
 
-  // Получить вопросы викторины
   socket.on("get-quiz-questions", (quizId) => {
     if (!adminSessions[socket.id]) return;
-
     const quiz = quizzes.find((q) => q.id === quizId);
     if (!quiz) return;
-
     socket.emit("quiz-questions", { quizId, questions: quiz.questions });
   });
 
-  // Старт викторины - отправляем первый вопрос всем игрокам
+  // Старт викторины
   socket.on("start-quiz", () => {
     if (!adminSessions[socket.id]) return;
     if (!currentQuizId) return;
@@ -226,7 +366,6 @@ io.on("connection", (socket) => {
 
     quizStarted = true;
 
-    // Отправляем каждому игроку его первый вопрос
     for (const id in players) {
       sendNextQuestionToPlayer(id, quiz);
     }
@@ -236,9 +375,7 @@ io.on("connection", (socket) => {
 
   // === ИГРОК ===
 
-  // Регистрация игрока
   socket.on("register", (data) => {
-    // Если викторина запущена, нельзя подключиться
     if (quizStarted) {
       socket.emit("quiz-already-started");
       return;
@@ -247,10 +384,8 @@ io.on("connection", (socket) => {
     const name = typeof data === "string" ? data : data.name;
     const savedId = typeof data === "object" ? data.savedId : null;
 
-    // Если есть сохранённый ID, восстанавливаем игрока
     if (savedId && players[savedId]) {
       const player = players[savedId];
-      // Перепривязываем к новому сокету
       players[socket.id] = player;
       delete players[savedId];
 
@@ -261,13 +396,7 @@ io.on("connection", (socket) => {
         restored: true,
       });
 
-      // Если был в игре - отправляем текущий вопрос
-      if (
-        currentQuizId &&
-        quizStarted &&
-        player.currentQuestion &&
-        !player.answeredQuestions.includes(player.currentQuestion.originalIndex)
-      ) {
+      if (currentQuizId && quizStarted && player.currentQuestion) {
         const quiz = quizzes.find((q) => q.id === currentQuizId);
         if (quiz) {
           const question = quiz.questions[player.currentQuestion.originalIndex];
@@ -275,7 +404,9 @@ io.on("connection", (socket) => {
             questionIndex: player.currentQuestion.questionNumber,
             totalQuestions: quiz.questions.length,
             text: question.text,
+            type: question.type,
             options: question.options,
+            correct: question.correct,
             image: question.image,
             timeLeft: QUESTION_TIME,
           });
@@ -292,42 +423,39 @@ io.on("connection", (socket) => {
       answeredQuestions: [],
       questionStartTime: null,
     };
-
     console.log(`Игрок зарегистрирован: ${name}`);
     socket.emit("registered", { playerId: socket.id, name, restored: false });
 
-    // Если викторина уже выбрана, инициализируем вопросы
     if (currentQuizId) {
       const quiz = quizzes.find((q) => q.id === currentQuizId);
-      if (quiz) {
-        initPlayerQuestions(socket.id, quiz);
-      }
+      if (quiz) initPlayerQuestions(socket.id, quiz);
     }
   });
 
-  // Ответ игрока
-  socket.on("submit-answer", (answerIndex) => {
+  socket.on("submit-answer", (answerData) => {
     const player = players[socket.id];
     if (!player || !currentQuizId) return;
-
-    // Проверка, есть ли текущий вопрос
     if (!player.currentQuestion) return;
-
-    // Проверка, не отвечал ли уже на этот вопрос
-    if (
-      player.answeredQuestions.includes(player.currentQuestion.originalIndex)
-    ) {
+    if (player.answeredQuestions.includes(player.currentQuestion.originalIndex))
       return;
-    }
 
     const quiz = quizzes.find((q) => q.id === currentQuizId);
     if (!quiz) return;
 
     const question = quiz.questions[player.currentQuestion.originalIndex];
-    const isCorrect = answerIndex === question.correct;
+
+    // Проверка ответа (поддержка нескольких правильных)
+    let isCorrect = false;
+    if (Array.isArray(answerData)) {
+      // Множественный выбор
+      isCorrect =
+        answerData.every((a) => question.correct.includes(a)) &&
+        answerData.length === question.correct.length;
+    } else {
+      isCorrect = question.correct.includes(answerData);
+    }
 
     if (isCorrect) {
-      // Бонус за скорость
       const timeSpent = player.questionStartTime
         ? (Date.now() - player.questionStartTime) / 1000
         : QUESTION_TIME;
@@ -336,54 +464,39 @@ io.on("connection", (socket) => {
       console.log(
         `Игрок ${player.name} ответил правильно! +${10 + bonus} баллов`,
       );
-    } else {
-      console.log(`Игрок ${player.name} ответил неправильно.`);
     }
 
     player.answeredQuestions.push(player.currentQuestion.originalIndex);
-
-    // Обновить рейтинг
     io.emit("update-leaderboard", getLeaderboard());
 
-    // Сразу отправляем следующий вопрос (без показа результата)
     setTimeout(() => {
       sendNextQuestionToPlayer(socket.id, quiz);
     }, 500);
   });
 
-  // Запрос следующего вопроса
   socket.on("get-next-question", () => {
     const player = players[socket.id];
     if (!player || !currentQuizId) return;
-
     const quiz = quizzes.find((q) => q.id === currentQuizId);
     if (!quiz) return;
-
     sendNextQuestionToPlayer(socket.id, quiz);
   });
 
-  // Время вышло - переход к следующему вопросу
   socket.on("time-up", () => {
     const player = players[socket.id];
     if (!player || !currentQuizId) return;
-
     const quiz = quizzes.find((q) => q.id === currentQuizId);
     if (!quiz) return;
-
-    // Помечаем вопрос как пропущенный (без баллов)
     if (player.currentQuestion) {
       player.answeredQuestions.push(player.currentQuestion.originalIndex);
     }
-
     sendNextQuestionToPlayer(socket.id, quiz);
   });
 
-  // Запрос финального рейтинга
   socket.on("get-final-leaderboard", () => {
     socket.emit("final-leaderboard", getLeaderboard());
   });
 
-  // Отключение
   socket.on("disconnect", () => {
     const player = players[socket.id];
     if (player) {
@@ -398,7 +511,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Инициализация очереди вопросов для игрока
 function initPlayerQuestions(playerId, quiz) {
   const shuffledIndices = shuffleArray(quiz.questions.map((_, i) => i));
   players[playerId].questionsQueue = shuffledIndices;
@@ -407,18 +519,15 @@ function initPlayerQuestions(playerId, quiz) {
   players[playerId].score = 0;
 }
 
-// Отправить следующий вопрос игроку
 function sendNextQuestionToPlayer(playerId, quiz) {
   const player = players[playerId];
   if (!player) return;
 
-  // Находим следующий неотвеченный вопрос
   const nextIndex = player.questionsQueue.find(
     (i) => !player.answeredQuestions.includes(i),
   );
 
   if (nextIndex === undefined) {
-    // Вопросы закончились - игрок завершил
     io.to(playerId).emit("player-quiz-ended", { score: player.score });
     return;
   }
@@ -430,14 +539,15 @@ function sendNextQuestionToPlayer(playerId, quiz) {
   };
   player.questionStartTime = Date.now();
 
-  // Отправляем вопрос конкретному игроку
   io.to(playerId).emit("new-question", {
     questionIndex: player.currentQuestion.questionNumber,
     totalQuestions: quiz.questions.length,
     text: question.text,
+    type: question.type,
     options: question.options,
+    correct: question.correct,
     image: question.image,
-    timeLeft: QUESTION_TIME,
+    timeLeft: question.timeLimit || QUESTION_TIME,
   });
 }
 
@@ -450,6 +560,9 @@ function getLeaderboard() {
     }))
     .sort((a, b) => b.score - a.score);
 }
+
+// Инициализация и запуск
+initDatabase();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => {

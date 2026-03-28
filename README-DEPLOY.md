@@ -1,93 +1,109 @@
-# 🚀 Развёртывание на Render.com
+# 🚀 Развёртывание на Render.com с базой данных
 
 ## Шаг 1: Загрузите проект на GitHub
-
-1. Создайте новый репозиторий на **GitHub** (https://github.com)
-2. Загрузите файлы проекта в репозиторий:
 
 ```bash
 cd "d:\Для Windows 11\Всё подряд\Users\kreck\Desktop\Прочее\Квиз для Коныча"
 git init
 git add .
-git commit -m "Initial commit"
+git commit -m "Quiz app with database"
 git branch -M main
 git remote add origin https://github.com/ВАШ_НИК/quiz-game.git
 git push -u origin main
 ```
 
-**Или через GitHub Desktop:**
-- Скачайте https://desktop.github.com/
-- Создайте новый репозиторий с папкой проекта
-- Нажмите "Publish repository"
+---
+
+## Шаг 2: Создайте базу данных PostgreSQL на Render
+
+1. https://dashboard.render.com/ → **New +** → **PostgreSQL**
+2. Заполните:
+   - **Name:** `quiz-db`
+   - **Region:** `Frankfurt, Germany`
+   - **Database:** `Free` (0$/мес)
+3. Нажмите **Create Database**
+4. После создания скопируйте **Internal Database URL** (вида `postgresql://user:pass@host:5432/dbname`)
 
 ---
 
-## Шаг 2: Создайте приложение на Render
+## Шаг 3: Создайте Web Service
 
-1. Зайдите на https://dashboard.render.com/
-2. Войдите через GitHub
-3. Нажмите **"New +"** → **"Web Service"**
-4. Выберите ваш репозиторий с викториной
-5. Заполните настройки:
+1. **New +** → **Web Service**
+2. Выберите ваш репозиторий
+3. Настройки:
 
 | Поле | Значение |
 |------|----------|
-| **Name** | `quiz-game` (или любое) |
-| **Region** | `Frankfurt, Germany` (ближе к РФ) |
+| **Name** | `quiz-game` |
+| **Region** | `Frankfurt, Germany` |
 | **Branch** | `main` |
-| **Root Directory** | *(оставьте пустым)* |
+| **Root Directory** | *(пусто)* |
 | **Runtime** | `Node` |
 | **Build Command** | `npm install` |
 | **Start Command** | `node server.js` |
 | **Instance Type** | **Free** |
 
-6. Нажмите **"Advanced"** и добавьте переменную окружения:
-   - **Key:** `PORT`
-   - **Value:** `3000`
+4. **Advanced** → добавьте переменную окружения:
+   - **Key:** `DATABASE_URL`
+   - **Value:** *(ваш Internal Database URL из шага 2)*
 
-7. Нажмите **"Create Web Service"**
-
----
-
-## Шаг 3: Дождитесь деплоя
-
-- Статус изменится на **"Live"** (2-5 минут)
-- Вы получите URL вида: `https://quiz-game-xxxx.onrender.com`
+5. Нажмите **Create Web Service**
 
 ---
 
-## Шаг 4: Используйте викторину
+## Шаг 4: Дождитесь деплоя
 
-- **Игроки:** `https://quiz-game-xxxx.onrender.com`
-- **Админ:** `https://quiz-game-xxxx.onrender.com/admin.html`
-- **Логин/пароль:** `admin` / `admin123`
-
----
-
-## ⚠️ Важно для бесплатного тарифа
-
-- Приложение **"засыпает"** через 15 минут без активности
-- Первый запуск занимает ~30 секунд
-- Для "пробуждения" просто откройте сайт
+- Статус: **"Live"** (3-5 минут)
+- URL: `https://quiz-game-xxxx.onrender.com`
 
 ---
 
-## 🔧 Если что-то не работает
+## ✅ Что работает
 
-1. **Проверьте логи** в Dashboard Render → Logs
-2. **Убедитесь**, что `package.json` в корне проекта
-3. **Проверьте**, что `node_modules` в `.gitignore`
+| Функция | Описание |
+|---------|----------|
+| 📚 **Сохранение викторин** | Все созданные тесты сохраняются в БД |
+| 🔄 **Восстановление** | После перезапуска сервера викторины загружаются |
+| 📊 **Типы вопросов** | Множественный выбор, Правда/Ложь, Заполнить пробел, Открытый |
+| 🖼️ **Картинки** | Поддержка изображений в вопросах |
+| ⏱️ **Таймер** | Настройка времени на каждый вопрос |
 
 ---
 
-## 📁 Структура проекта для Render
+## 📁 Структура БД
 
+```sql
+quizzes:
+  - id (SERIAL PRIMARY KEY)
+  - name (VARCHAR)
+  - created_at (TIMESTAMP)
+
+questions:
+  - id (SERIAL PRIMARY KEY)
+  - quiz_id (INTEGER → quizzes.id)
+  - text (TEXT)
+  - type (VARCHAR) -- multiple_choice, true_false, fill_blank, open_ended
+  - options (JSONB) -- ["вариант 1", "вариант 2"]
+  - correct (JSONB) -- [0, 2] -- индексы правильных
+  - image (TEXT) -- base64
+  - order_index (INTEGER)
 ```
-quiz-game/
-├── server.js          ✅
-├── package.json       ✅
-├── .gitignore         ✅
-└── public/
-    ├── index.html     ✅
-    └── admin.html     ✅
+
+---
+
+## ⚠️ Важно
+
+- **Бесплатная БД:** 1 ГБ, 90 дней хранения
+- **Для продления:** Подключите карту или создайте новую БД
+- **Без БД:** Викторины хранятся только в RAM (теряются при перезапуске)
+
+---
+
+## 🔧 Локальный запуск (без БД)
+
+```bash
+npm install
+npm start
 ```
+
+Викторины будут работать в оперативной памяти.
