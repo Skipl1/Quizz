@@ -18,9 +18,13 @@ const ADMIN_CREDENTIALS = {
 };
 
 // Подключение к PostgreSQL (Render автоматически предоставляет DATABASE_URL)
-const pool = process.env.DATABASE_URL
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  "postgresql://data:ZzolaOF9eI79WE8oa8NbqCmxKXw6YqFg@dpg-d73qtjggjchc73as75bg-a.frankfurt-postgres.render.com:5432/data_wtak?ssl=true";
+
+const pool = DATABASE_URL
   ? new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: DATABASE_URL,
       ssl: { rejectUnauthorized: false },
     })
   : null;
