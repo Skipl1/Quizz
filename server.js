@@ -345,7 +345,7 @@ io.on("connection", (socket) => {
       initPlayerQuestions(id, quiz);
     }
 
-    io.emit("update-leaderboard", getLeaderboard());
+    broadcastLeaderboard();
     io.emit("quiz-ready", {
       quizId,
       name: quiz.name,
@@ -472,7 +472,7 @@ io.on("connection", (socket) => {
     }
 
     player.answeredQuestions.push(player.currentQuestion.originalIndex);
-    io.emit("update-leaderboard", getLeaderboard());
+    broadcastLeaderboard();
 
     setTimeout(() => {
       sendNextQuestionToPlayer(socket.id, quiz);
@@ -507,7 +507,7 @@ io.on("connection", (socket) => {
     if (player) {
       console.log(`Игрок отключился: ${player.name}`);
       delete players[socket.id];
-      io.emit("update-leaderboard", getLeaderboard());
+      broadcastLeaderboard();
     }
     if (adminSessions[socket.id]) {
       delete adminSessions[socket.id];
@@ -564,6 +564,14 @@ function getLeaderboard() {
       answered: data.answeredQuestions.length,
     }))
     .sort((a, b) => b.score - a.score);
+}
+
+// Отправить обновление рейтинга всем
+function broadcastLeaderboard() {
+  const leaderboard = getLeaderboard();
+  io.emit("update-leaderboard", leaderboard);
+  // Также отправляем количество игроков
+  io.emit("players-count", { count: Object.keys(players).length });
 }
 
 // Инициализация и запуск
