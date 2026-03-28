@@ -20,12 +20,18 @@ const ADMIN_CREDENTIALS = {
 // Подключение к PostgreSQL (Render автоматически предоставляет DATABASE_URL)
 const DATABASE_URL =
   process.env.DATABASE_URL ||
-  "postgresql://data:ZzolaOF9eI79WE8oa8NbqCmxKXw6YqFg@dpg-d73qtjggjchc73as75bg-a.frankfurt-postgres.render.com:5432/data_wtak?ssl=true";
+  "postgresql://data:ZzolaOF9eI79WE8oa8NbqCmxKXw6YqFg@dpg-d73qtjggjchc73as75bg-a.frankfurt-postgres.render.com:5432/data_wtak?sslmode=require";
 
 const pool = DATABASE_URL
   ? new Pool({
       connectionString: DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeoutMillis: 30000,
+      idleTimeoutMillis: 60000,
+      statementTimeoutMillis: 30000,
+      max: 5,
     })
   : null;
 
@@ -40,7 +46,7 @@ const adminSessions = {};
 // Инициализация БД
 async function initDatabase() {
   if (!pool) {
-    console.log("⚠️ База данных не подключена. Работа в режиме RAM.");
+    console.log("База данных не подключена. Работа в режиме RAM.");
     // Тестовая викторина
     quizzes.push({
       id: "default",
@@ -80,6 +86,9 @@ async function initDatabase() {
   }
 
   try {
+    // Проверяем подключение перед выполнением запросов
+    await pool.query("SELECT NOW()");
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS quizzes (
         id SERIAL PRIMARY KEY,
@@ -99,12 +108,13 @@ async function initDatabase() {
         order_index INTEGER DEFAULT 0
       )
     `);
-    console.log("✅ База данных подключена и готова.");
+    console.log("База данных подключена и готова.");
 
     // Загрузка викторин из БД
     await loadQuizzesFromDB();
   } catch (err) {
-    console.error("❌ Ошибка БД:", err.message);
+    console.error("Ошибка подключения к БД:", err.message);
+    console.log("Работа в режиме RAM (без подключения к БД)");
   }
 }
 
@@ -114,6 +124,65 @@ async function loadQuizzesFromDB() {
     const result = await pool.query(
       "SELECT * FROM quizzes ORDER BY created_at DESC",
     );
+
+    // Если викторин нет, создаём тестовую
+    if (result.rows.length === 0) {
+      console.log("Таблица пуста. Создаю тестовую викторину...");
+      const quizResult = await pool.query(
+        "INSERT INTO quizzes (name) VALUES ($1) RETURNING id",
+        ["Тестовая викторина"],
+      );
+      const quizId = quizResult.rows[0].id;
+
+      // Добавляем тестовые вопросы
+      const questions = [
+        {
+          text: "Столица Франции?",
+          type: "multiple_choice",
+          options: JSON.stringify(["Лондон", "Берлин", "Париж", "Мадрид"]),
+          correct: JSON.stringify([2]),
+          order_index: 0,
+        },
+        {
+          text: "Сколько планет в Солнечной системе?",
+          type: "multiple_choice",
+          options: JSON.stringify(["7", "8", "9", "10"]),
+          correct: JSON.stringify([1]),
+          order_index: 1,
+        },
+        {
+          text: "H2O — это формула воды",
+          type: "true_false",
+          options: JSON.stringify(["Правда", "Ложь"]),
+          correct: JSON.stringify([0]),
+          order_index: 2,
+        },
+        {
+          text: "Кто написал «Войну и мир»?",
+          type: "multiple_choice",
+          options: JSON.stringify([
+            "Достоевский",
+            "Чехов",
+            "Толстой",
+            "Пушкин",
+          ]),
+          correct: JSON.stringify([2]),
+          order_index: 3,
+        },
+      ];
+
+      for (const q of questions) {
+        await pool.query(
+          "INSERT INTO questions (quiz_id, text, type, options, correct, order_index) VALUES ($1, $2, $3, $4, $5, $6)",
+          [quizId, q.text, q.type, q.options, q.correct, q.order_index],
+        );
+      }
+      console.log("Тестовая викторина создана");
+
+      // Перезагружаем список
+      return loadQuizzesFromDB();
+    }
+
     for (const row of result.rows) {
       const qResult = await pool.query(
         "SELECT * FROM questions WHERE quiz_id = $1 ORDER BY order_index",
@@ -134,7 +203,7 @@ async function loadQuizzesFromDB() {
         })),
       });
     }
-    console.log(`📚 Загружено викторин: ${quizzes.length}`);
+    console.log(`Загружено викторин: ${quizzes.length}`);
   } catch (err) {
     console.error("Ошибка загрузки викторин:", err.message);
   }
@@ -305,6 +374,60 @@ io.on("connection", (socket) => {
       })),
     );
     socket.emit("quiz-updated", { quizId: quiz.id, questions: quiz.questions });
+  });
+
+  // Обновить вопрос
+  socket.on("update-question", async (data) => {
+    if (!adminSessions[socket.id]) return;
+
+    const quiz = quizzes.find((q) => q.id === data.quizId);
+    if (!quiz || !quiz.questions[data.questionIndex]) return;
+
+    const questionData = {
+      text: data.text,
+      type: data.type || "multiple_choice",
+      options: data.options,
+      correct: data.correct,
+      image: data.image || null,
+      timeLimit: data.timeLimit || QUESTION_TIME,
+      answerType: data.answerType || "single",
+    };
+
+    if (pool && quiz.dbId) {
+      const q = quiz.questions[data.questionIndex];
+      try {
+        if (q.id) {
+          await pool.query(
+            "UPDATE questions SET text = $1, type = $2, options = $3, correct = $4, image = $5, time_limit = $6 WHERE id = $7",
+            [
+              data.text,
+              data.type || "multiple_choice",
+              JSON.stringify(data.options),
+              JSON.stringify(data.correct),
+              data.image || null,
+              data.timeLimit || QUESTION_TIME,
+              q.id,
+            ],
+          );
+        }
+      } catch (err) {
+        console.error("Ошибка обновления вопроса:", err.message);
+      }
+    }
+
+    quiz.questions[data.questionIndex] = questionData;
+    socket.emit("question-updated", {
+      quizId: quiz.id,
+      questionIndex: data.questionIndex,
+    });
+    socket.emit(
+      "quizzes-list",
+      quizzes.map((q) => ({
+        id: q.id,
+        name: q.name,
+        questionsCount: q.questions.length,
+      })),
+    );
   });
 
   // Удалить викторину
@@ -521,14 +644,32 @@ io.on("connection", (socket) => {
 
     const question = quiz.questions[player.currentQuestion.originalIndex];
 
-    // Проверка ответа (поддержка нескольких правильных)
+    // Проверка ответа в зависимости от типа
     let isCorrect = false;
-    if (Array.isArray(answerData)) {
+
+    if (typeof answerData === "object" && answerData !== null) {
+      // Ordering или Matching или Text
+      if (answerData.type === "ordering") {
+        // Сравниваем порядок
+        isCorrect =
+          JSON.stringify(answerData.answer) ===
+          JSON.stringify(question.correct);
+      } else if (answerData.type === "matching") {
+        isCorrect = answerData.correct;
+      } else if (answerData.type === "text") {
+        // Текстовый ответ - сравнение без учёта регистра
+        const correctAnswer = question.options[0] || "";
+        isCorrect =
+          answerData.answer.toLowerCase().trim() ===
+          correctAnswer.toLowerCase().trim();
+      }
+    } else if (Array.isArray(answerData)) {
       // Множественный выбор
       isCorrect =
         answerData.every((a) => question.correct.includes(a)) &&
         answerData.length === question.correct.length;
     } else {
+      // Одиночный выбор
       isCorrect = question.correct.includes(answerData);
     }
 
@@ -696,4 +837,19 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`Игроки: http://localhost:${PORT}`);
   console.log(`Админ: http://localhost:${PORT}/admin.html`);
   console.log(`Логин/пароль админа: admin / admin123`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Ошибка: порт ${PORT} уже занят.`);
+    console.error("Решение:");
+    console.error("  1. Остановите другой процесс Node.js");
+    console.error(
+      "  2. Или используйте другой порт: set PORT=3001 && npm start",
+    );
+    process.exit(1);
+  } else {
+    console.error("❌ Ошибка сервера:", err.message);
+    process.exit(1);
+  }
 });

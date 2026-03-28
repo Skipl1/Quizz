@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QUIZZ — Игровая платформа</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card-bg: rgba(30, 41, 59, 0.7);
+        --accent: #8b5cf6;
+        --accent-hover: #7c3aed;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+
+      body {
+        background-color: var(--bg);
+        background-image:
+          radial-gradient(
+            circle at 10% 20%,
+            rgba(139, 92, 246, 0.15) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 90% 80%,
+            rgba(139, 92, 246, 0.1) 0%,
+            transparent 40%
+          );
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      /* Навигация */
+      nav {
+        position: absolute;
+        top: 0;
+        width: 100%;
+        padding: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: -1px;
+        text-transform: uppercase;
+      }
+
+      .logo span {
+        color: var(--accent);
+      }
+
+      /* Основная карточка */
+      .main-card {
+        background: var(--card-bg);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 3rem;
+        border-radius: 24px;
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        animation: fadeIn 0.8s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      h1 {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+      }
+
+      p {
+        color: var(--text-muted);
+        margin-bottom: 2rem;
+        font-size: 0.95rem;
+      }
+
+      /* Поле ввода */
+      .input-group {
+        position: relative;
+        margin-bottom: 1.5rem;
+      }
+
+      input {
+        width: 100%;
+        background: rgba(15, 23, 42, 0.6);
+        border: 2px solid rgba(255, 255, 255, 0.05);
+        padding: 1.2rem;
+        border-radius: 12px;
+        color: white;
+        font-size: 1.2rem;
+        text-align: center;
+        letter-spacing: 4px;
+        transition: all 0.3s ease;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+      }
+
+      input::placeholder {
+        letter-spacing: normal;
+        font-size: 0.9rem;
+        color: #475569;
+      }
+
+      /* Кнопка */
+      .btn {
+        width: 100%;
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 1.1rem;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .btn:hover {
+        background: var(--accent-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.4);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      /* Ссылка для хоста */
+      .secondary-action {
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      .secondary-action a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .secondary-action a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="logo">QUIZZ<span>.</span></div>
+      <div>
+        <button
+          style="
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+          "
+        >
+          Войти
+        </button>
+      </div>
+    </nav>
+
+    <div class="main-card">
+      <h1>Присоединяйся</h1>
+      <p>Введи код комнаты, чтобы начать тест</p>
+
+      <div class="input-group">
+        <input type="text" placeholder="000 000" maxlength="6" />
+      </div>
+
+      <button class="btn">Войти в игру</button>
+
+      <div class="secondary-action">
+        Хотите создать свой квиз? <a href="#">Начать здесь</a>
+      </div>
+    </div>
+  </body>
+</html>
