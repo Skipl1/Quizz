@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админ-панель</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        min-height: 100vh;
+        padding: 40px 20px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: white;
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 2rem;
+      }
+      .card {
+        background: white;
+        border-radius: 15px;
+        padding: 30px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      }
+      .card h2 {
+        color: #333;
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+      }
+
+      /* Login form */
+      .login-form input {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1rem;
+        margin-bottom: 15px;
+      }
+      .login-form input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      /* Buttons */
+      .btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 10px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .btn-full {
+        width: 100%;
+      }
+      .btn-small {
+        padding: 8px 15px;
+        font-size: 0.9rem;
+      }
+      .btn-danger {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      }
+      .btn-success {
+        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+      }
+      .btn-warning {
+        background: linear-gradient(135deg, #f39c12 0%, #d68910 100%);
+      }
+
+      /* Quiz list */
+      .quiz-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        background: #f5f5f5;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .quiz-item:hover {
+        background: #e8e8e8;
+      }
+      .quiz-item.active {
+        background: #667eea;
+        color: white;
+      }
+      .quiz-item .name {
+        font-weight: 600;
+      }
+      .quiz-item .count {
+        color: #999;
+        font-size: 0.9rem;
+      }
+      .quiz-item.active .count {
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      /* Leaderboard */
+      .leaderboard-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        background: #f5f5f5;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        transition: transform 0.2s;
+      }
+      .leaderboard-item:hover {
+        transform: translateX(5px);
+      }
+      .leaderboard-item .rank {
+        font-weight: bold;
+        color: #667eea;
+        margin-right: 15px;
+        min-width: 30px;
+      }
+      .leaderboard-item .name {
+        flex: 1;
+      }
+      .leaderboard-item .score {
+        font-weight: bold;
+        color: #667eea;
+        background: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        min-width: 80px;
+        text-align: center;
+      }
+      .leaderboard-item .progress {
+        color: #999;
+        font-size: 0.85rem;
+        margin-left: 10px;
+      }
+
+      /* Question editor */
+      .editor-section {
+        display: none;
+      }
+      .editor-section.active {
+        display: block;
+      }
+      .editor-section input,
+      .editor-section textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+        margin-bottom: 12px;
+      }
+      .editor-section textarea {
+        min-height: 80px;
+        resize: vertical;
+      }
+      .editor-section input:focus,
+      .editor-section textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .option-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-items: center;
+      }
+      .option-row input {
+        flex: 1;
+        margin-bottom: 0;
+      }
+      .option-row input[type="radio"] {
+        flex: 0;
+        width: 20px;
+        height: 20px;
+      }
+
+      .image-preview {
+        max-width: 200px;
+        max-height: 150px;
+        margin: 10px 0;
+        border-radius: 8px;
+        display: none;
+      }
+      .image-preview.show {
+        display: block;
+      }
+
+      /* Game controls */
+      .game-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .game-info .label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+      }
+      .game-info .value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-top: 5px;
+      }
+
+      .players-count {
+        text-align: center;
+        color: #667eea;
+        font-weight: 600;
+        margin-bottom: 15px;
+      }
+      .empty-state {
+        text-align: center;
+        color: #999;
+        padding: 30px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .tab {
+        flex: 1;
+        padding: 12px;
+        background: #f5f5f5;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.2s;
+      }
+      .tab:hover {
+        background: #e8e8e8;
+      }
+      .tab.active {
+        background: #667eea;
+        color: white;
+      }
+
+      .questions-list {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .question-item {
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .question-item .text {
+        flex: 1;
+        font-weight: 500;
+      }
+      .question-item .correct-mark {
+        color: #27ae60;
+        margin-right: 10px;
+      }
+
+      .status {
+        text-align: center;
+        color: #999;
+        margin-top: 15px;
+        font-size: 0.9rem;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .quiz-running {
+        background: #27ae60 !important;
+      }
+
+      .info-box {
+        background: #f0f4ff;
+        border-left: 4px solid #667eea;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 0 8px 8px 0;
+      }
+      .info-box p {
+        color: #555;
+        line-height: 1.6;
+      }
+
+      /* Live indicator */
+      .live-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        background: #27ae60;
+        border-radius: 50%;
+        margin-right: 8px;
+        animation: pulse-live 2s infinite;
+      }
+      @keyframes pulse-live {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.2);
+        }
+      }
+
+      .leaderboard-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+      .leaderboard-header h3 {
+        flex: 1;
+      }
+      .live-text {
+        color: #27ae60;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎯 Админ-панель</h1>
+
+      <!-- Экран входа -->
+      <div id="login-screen" class="card">
+        <h2>🔐 Вход для ведущего</h2>
+        <div class="login-form">
+          <input type="text" id="admin-login" placeholder="Логин" />
+          <input type="password" id="admin-password" placeholder="Пароль" />
+          <button class="btn btn-full" onclick="adminLogin()">Войти</button>
+        </div>
+        <p
+          id="login-error"
+          style="color: #e74c3c; margin-top: 10px; display: none"
+        ></p>
+      </div>
+
+      <!-- Основной интерфейс -->
+      <div id="main-screen" class="hidden">
+        <!-- Табы -->
+        <div class="tabs">
+          <button class="tab active" onclick="showTab('create')">
+            Создать викторину
+          </button>
+          <button class="tab" onclick="showTab('play')">Играть</button>
+          <button class="tab" onclick="showTab('leaderboard')">
+            🔴 Рейтинг
+          </button>
+        </div>
+
+        <!-- Создание викторины -->
+        <div id="create-tab" class="editor-section active">
+          <div class="card">
+            <h2>📝 Новая викторина</h2>
+            <input
+              type="text"
+              id="quiz-name"
+              placeholder="Название викторины"
+              style="
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                margin-bottom: 15px;
+              "
+            />
+            <button class="btn btn-success" onclick="createQuiz()">
+              Создать викторину
+            </button>
+          </div>
+
+          <div class="card">
+            <h2>➕ Добавить вопрос</h2>
+            <select
+              id="quiz-select"
+              style="
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                margin-bottom: 15px;
+              "
+            >
+              <option value="">Выберите викторину</option>
+            </select>
+
+            <textarea id="question-text" placeholder="Текст вопроса"></textarea>
+
+            <div class="option-row">
+              <input type="radio" name="correct" value="0" checked />
+              <input
+                type="text"
+                class="option-input"
+                data-index="0"
+                placeholder="Вариант 1"
+              />
+            </div>
+            <div class="option-row">
+              <input type="radio" name="correct" value="1" />
+              <input
+                type="text"
+                class="option-input"
+                data-index="1"
+                placeholder="Вариант 2"
+              />
+            </div>
+            <div class="option-row">
+              <input type="radio" name="correct" value="2" />
+              <input
+                type="text"
+                class="option-input"
+                data-index="2"
+                placeholder="Вариант 3"
+              />
+            </div>
+            <div class="option-row">
+              <input type="radio" name="correct" value="3" />
+              <input
+                type="text"
+                class="option-input"
+                data-index="3"
+                placeholder="Вариант 4"
+              />
+            </div>
+
+            <div style="margin: 15px 0">
+              <label style="display: block; margin-bottom: 8px"
+                >Картинка (необязательно):</label
+              >
+              <input
+                type="file"
+                id="question-image"
+                accept="image/*"
+                onchange="previewImage()"
+              />
+              <img id="image-preview" class="image-preview" />
+            </div>
+
+            <button class="btn btn-full" onclick="addQuestion()">
+              Добавить вопрос
+            </button>
+          </div>
+
+          <div class="card">
+            <h2>📋 Вопросы в викторине</h2>
+            <div id="questions-list" class="questions-list">
+              <div class="empty-state">
+                Выберите викторину для просмотра вопросов
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Игра -->
+        <div id="play-tab" class="editor-section">
+          <div class="card">
+            <h2>🎮 Управление игрой</h2>
+
+            <div class="info-box">
+              <p>
+                📌 <strong>Как работает:</strong> Каждый игрок получает
+                случайные вопросы в разном порядке. На каждый вопрос даётся 30
+                секунд. После ответа игрок сразу переходит к следующему вопросу.
+              </p>
+            </div>
+
+            <div id="game-not-started">
+              <p style="margin-bottom: 15px">
+                Выберите викторину для начала игры:
+              </p>
+              <div id="game-quiz-list"></div>
+            </div>
+
+            <div id="game-active" class="hidden">
+              <div class="game-info" id="game-info-card">
+                <div class="label">Викторина</div>
+                <div class="value" id="current-quiz-name">Не выбрана</div>
+                <div class="label" style="margin-top: 10px">
+                  <span class="live-indicator"></span>
+                  <span id="players-online">Игроков онлайн: 0</span>
+                </div>
+              </div>
+
+              <button
+                class="btn btn-success btn-full"
+                id="start-btn"
+                onclick="startQuiz()"
+              >
+                ▶️ Запустить викторину
+              </button>
+              <button
+                class="btn btn-warning btn-full"
+                id="stop-btn"
+                onclick="stopQuiz()"
+                style="margin-top: 10px"
+                disabled
+              >
+                ⏹️ Остановить / Перезапустить
+              </button>
+
+              <div class="status" id="game-status">Ожидание запуска...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Рейтинг -->
+        <div id="leaderboard-tab" class="editor-section">
+          <div class="card">
+            <div class="leaderboard-header">
+              <h3>📊 Рейтинг игроков</h3>
+              <span class="live-text"
+                ><span class="live-indicator"></span>Live</span
+              >
+            </div>
+            <div class="players-count" id="players-count">Игроков: 0</div>
+            <div id="leaderboard">
+              <div class="empty-state">Пока нет игроков</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+      let currentQuizId = null;
+      let imageBase64 = null;
+      let isRunning = false;
+
+      // Вход админа
+      function adminLogin() {
+        const login = document.getElementById("admin-login").value;
+        const password = document.getElementById("admin-password").value;
+
+        socket.emit("admin-login", { login, password }, (response) => {
+          if (response.success) {
+            document.getElementById("login-screen").classList.add("hidden");
+            document.getElementById("main-screen").classList.remove("hidden");
+            socket.emit("get-quizzes");
+          } else {
+            document.getElementById("login-error").textContent = response.error;
+            document.getElementById("login-error").style.display = "block";
+          }
+        });
+      }
+
+      // Табы
+      function showTab(tabName) {
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.remove("active"));
+        document
+          .querySelectorAll(".editor-section")
+          .forEach((s) => s.classList.remove("active"));
+
+        event.target.classList.add("active");
+        document.getElementById(tabName + "-tab").classList.add("active");
+      }
+
+      // Создание викторины
+      function createQuiz() {
+        const name = document.getElementById("quiz-name").value.trim();
+        socket.emit("create-quiz", { name });
+        document.getElementById("quiz-name").value = "";
+      }
+
+      socket.on("quiz-created", (data) => {
+        alert(`Викторина "${data.name}" создана!`);
+        socket.emit("get-quizzes");
+      });
+
+      // Список викторин
+      socket.on("quizzes-list", (quizzes) => {
+        const select = document.getElementById("quiz-select");
+        const gameList = document.getElementById("game-quiz-list");
+
+        select.innerHTML = '<option value="">Выберите викторину</option>';
+        gameList.innerHTML = "";
+
+        quizzes.forEach((quiz) => {
+          select.innerHTML += `<option value="${quiz.id}">${quiz.name} (${quiz.questionsCount} вопросов)</option>`;
+          gameList.innerHTML += `
+          <div class="quiz-item" onclick="selectQuiz('${quiz.id}')">
+            <span class="name">${quiz.name}</span>
+            <span class="count">${quiz.questionsCount} вопр.</span>
+          </div>
+        `;
+        });
+      });
+
+      // Выбор викторины для редактирования
+      document.getElementById("quiz-select").addEventListener("change", (e) => {
+        if (e.target.value) {
+          socket.emit("get-quiz-questions", e.target.value);
+        }
+      });
+
+      socket.on("quiz-questions", (data) => {
+        currentQuizId = data.quizId;
+        renderQuestionsList(data.questions);
+      });
+
+      function renderQuestionsList(questions) {
+        const container = document.getElementById("questions-list");
+        if (questions.length === 0) {
+          container.innerHTML =
+            '<div class="empty-state">Пока нет вопросов</div>';
+          return;
+        }
+
+        container.innerHTML = questions
+          .map(
+            (q, i) => `
+        <div class="question-item">
+          <span class="correct-mark">✓</span>
+          <span class="text">${i + 1}. ${escapeHtml(q.text)}</span>
+          <button class="btn btn-small btn-danger" onclick="deleteQuestion(${i})">Удалить</button>
+        </div>
+      `,
+          )
+          .join("");
+      }
+
+      // Добавление вопроса
+      function addQuestion() {
+        const quizId = document.getElementById("quiz-select").value;
+        const text = document.getElementById("question-text").value.trim();
+        const options = Array.from(
+          document.querySelectorAll(".option-input"),
+        ).map((i) => i.value.trim());
+        const correct = parseInt(
+          document.querySelector('input[name="correct"]:checked').value,
+        );
+
+        if (!quizId) {
+          alert("Выберите викторину");
+          return;
+        }
+        if (!text) {
+          alert("Введите текст вопроса");
+          return;
+        }
+        if (options.some((o) => !o)) {
+          alert("Заполните все варианты ответов");
+          return;
+        }
+
+        socket.emit("add-question", {
+          quizId,
+          text,
+          options,
+          correct,
+          image: imageBase64,
+        });
+
+        // Очистка
+        document.getElementById("question-text").value = "";
+        document
+          .querySelectorAll(".option-input")
+          .forEach((i) => (i.value = ""));
+        document.querySelector('input[name="correct"][value="0"]').checked =
+          true;
+        imageBase64 = null;
+        document.getElementById("image-preview").classList.remove("show");
+        document.getElementById("question-image").value = "";
+      }
+
+      socket.on("question-added", () => {
+        socket.emit("get-quiz-questions", currentQuizId);
+      });
+
+      // Удаление вопроса
+      function deleteQuestion(index) {
+        if (confirm("Удалить этот вопрос?")) {
+          socket.emit("delete-question", {
+            quizId: currentQuizId,
+            questionIndex: index,
+          });
+        }
+      }
+
+      // Выбор викторины для игры
+      function selectQuiz(quizId) {
+        socket.emit("select-quiz", quizId);
+      }
+
+      socket.on("quiz-ready", (data) => {
+        currentQuizId = data.quizId;
+        document.getElementById("game-not-started").classList.add("hidden");
+        document.getElementById("game-active").classList.remove("hidden");
+        document.getElementById("current-quiz-name").textContent =
+          `${data.name} (${data.questionsCount} вопросов)`;
+        document.getElementById("start-btn").disabled = false;
+        document.getElementById("stop-btn").disabled = true;
+        document
+          .getElementById("game-info-card")
+          .classList.remove("quiz-running");
+        isRunning = false;
+        document.getElementById("game-status").textContent =
+          'Викторина выбрана. Нажмите "Запустить" для начала.';
+      });
+
+      // Запуск викторины
+      function startQuiz() {
+        socket.emit("start-quiz");
+        document.getElementById("start-btn").disabled = true;
+        document.getElementById("stop-btn").disabled = false;
+        document.getElementById("game-info-card").classList.add("quiz-running");
+        document.getElementById("game-status").textContent =
+          "Викторина запущена! Игроки получают вопросы...";
+        isRunning = true;
+      }
+
+      // Остановка / Перезапуск викторины
+      function stopQuiz() {
+        socket.emit("select-quiz", currentQuizId); // Перезапуск - выбираем ту же викторину
+        document.getElementById("game-status").textContent =
+          'Викторина перезапущена. Нажмите "Запустить" для начала.';
+      }
+
+      // Динамическое обновление рейтинга (Live)
+      socket.on("update-leaderboard", (leaderboard) => {
+        updateLeaderboardUI(leaderboard);
+      });
+
+      function updateLeaderboardUI(leaderboard) {
+        document.getElementById("players-count").textContent =
+          `Игроков: ${leaderboard.length}`;
+        document.getElementById("players-online").textContent =
+          `Игроков онлайн: ${leaderboard.length}`;
+
+        const container = document.getElementById("leaderboard");
+        if (leaderboard.length === 0) {
+          container.innerHTML =
+            '<div class="empty-state">Пока нет игроков</div>';
+          return;
+        }
+
+        container.innerHTML = leaderboard
+          .map(
+            (player, i) => `
+        <div class="leaderboard-item" style="animation: fadeIn 0.3s ease;">
+          <span class="rank">#${i + 1}</span>
+          <span class="name">${escapeHtml(player.name)}</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="score">${player.score} бал.</span>
+          </div>
+        </div>
+      `,
+          )
+          .join("");
+      }
+
+      // Предпросмотр картинки
+      function previewImage() {
+        const file = document.getElementById("question-image").files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          imageBase64 = e.target.result;
+          const img = document.getElementById("image-preview");
+          img.src = imageBase64;
+          img.classList.add("show");
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Добавляем CSS анимацию
+      const style = document.createElement("style");
+      style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `;
+      document.head.appendChild(style);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Викторина</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+      .container {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        max-width: 500px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+      h1 {
+        color: #333;
+        margin-bottom: 30px;
+        font-size: 2rem;
+      }
+      .screen {
+        display: none;
+      }
+      .screen.active {
+        display: block;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1rem;
+        margin-bottom: 20px;
+        transition: border-color 0.3s;
+      }
+      input[type="text"]:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .question-number {
+        color: #999;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+      }
+      .question-text {
+        font-size: 1.3rem;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 600;
+      }
+
+      .timer-bar {
+        width: 100%;
+        height: 8px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        overflow: hidden;
+      }
+      .timer-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        width: 100%;
+        transition: width 1s linear;
+      }
+      .timer-fill.warning {
+        background: linear-gradient(90deg, #f39c12 0%, #d68910 100%);
+      }
+      .timer-fill.danger {
+        background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
+      }
+
+      .timer-text {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+        margin-bottom: 15px;
+      }
+
+      .question-image {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: none;
+      }
+      .question-image.show {
+        display: block;
+      }
+
+      .options {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .option-btn {
+        background: #f5f5f5;
+        color: #333;
+        padding: 15px 20px;
+        border: 2px solid #e0e0e0;
+        text-align: left;
+        font-size: 1rem;
+        border-radius: 10px;
+      }
+      .option-btn:hover:not(:disabled) {
+        background: #e8e8e8;
+        border-color: #667eea;
+      }
+      .option-btn.selected {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      .waiting {
+        color: #666;
+        font-size: 1.2rem;
+        padding: 40px 0;
+      }
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .player-info {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .player-name {
+        font-weight: 600;
+        color: #667eea;
+      }
+      .player-score {
+        font-weight: bold;
+        color: #667eea;
+        background: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+      }
+
+      .leaderboard-mini {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 2px solid #eee;
+      }
+      .leaderboard-mini h3 {
+        color: #999;
+        font-size: 1rem;
+        margin-bottom: 10px;
+      }
+      .leaderboard-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 15px;
+        background: #f9f9f9;
+        border-radius: 8px;
+        margin-bottom: 5px;
+        font-size: 0.9rem;
+      }
+      .leaderboard-item .rank {
+        font-weight: bold;
+        color: #667eea;
+      }
+      .leaderboard-item .score {
+        font-weight: bold;
+        color: #667eea;
+      }
+
+      .time-up-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 15px;
+        font-weight: 600;
+        display: none;
+      }
+
+      .loading-next {
+        margin-top: 15px;
+        color: #999;
+        font-size: 0.95rem;
+        display: none;
+      }
+
+      .restored-badge {
+        background: #27ae60;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        margin-left: 10px;
+      }
+
+      /* Live рейтинг на экране вопроса */
+      .live-leaderboard {
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+      }
+      .live-leaderboard h4 {
+        color: #999;
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .live-dot {
+        width: 8px;
+        height: 8px;
+        background: #27ae60;
+        border-radius: 50%;
+        animation: pulse-live 2s infinite;
+      }
+      @keyframes pulse-live {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+      .live-leaderboard-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 12px;
+        background: #f9f9f9;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        font-size: 0.85rem;
+      }
+      .live-leaderboard-item .rank {
+        color: #667eea;
+        font-weight: bold;
+        margin-right: 8px;
+      }
+      .live-leaderboard-item .name {
+        flex: 1;
+      }
+      .live-leaderboard-item .score {
+        color: #667eea;
+        font-weight: bold;
+      }
+      .live-leaderboard-item.my-score {
+        background: #e8f4fd;
+        border: 1px solid #667eea;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Экран входа -->
+      <div id="login-screen" class="screen active">
+        <h1>🎮 Викторина</h1>
+        <input
+          type="text"
+          id="player-name"
+          placeholder="Введите ваше имя"
+          maxlength="20"
+        />
+        <button onclick="register()">Войти в игру</button>
+        <p
+          id="restore-status"
+          style="color: #27ae60; margin-top: 15px; display: none"
+        >
+          🔄 Восстановление сессии...
+        </p>
+      </div>
+
+      <!-- Экран ожидания -->
+      <div id="waiting-screen" class="screen">
+        <h1>🎮 Викторина</h1>
+        <div class="player-info">
+          <div>
+            <span
+              >Игрок: <strong class="player-name" id="display-name"></strong
+            ></span>
+            <span
+              id="restored-badge"
+              class="restored-badge"
+              style="display: none"
+              >Восстановлено</span
+            >
+          </div>
+          <span class="player-score" id="display-score">0 бал.</span>
+        </div>
+        <div class="waiting">
+          <div class="spinner"></div>
+          <p id="waiting-text">Ожидание начала викторины...</p>
+        </div>
+        <div class="leaderboard-mini" id="mini-leaderboard"></div>
+      </div>
+
+      <!-- Экран вопроса -->
+      <div id="question-screen" class="screen">
+        <div class="question-number" id="question-number">Вопрос 1 из 4</div>
+
+        <div class="timer-text" id="timer-text">30</div>
+        <div class="timer-bar">
+          <div class="timer-fill" id="timer-fill"></div>
+        </div>
+
+        <img id="question-image" class="question-image" alt="К вопросу" />
+        <div class="question-text" id="question-text">Текст вопроса</div>
+        <div class="options" id="options-container"></div>
+        <div id="time-up" class="time-up-message">⏰ Время вышло!</div>
+        <p class="loading-next" id="loading-next">
+          ⏳ Загрузка следующего вопроса...
+        </p>
+
+        <!-- Live рейтинг во время вопроса -->
+        <div class="live-leaderboard" id="question-leaderboard">
+          <h4><span class="live-dot"></span> Рейтинг</h4>
+          <div id="live-leaderboard-content"></div>
+        </div>
+      </div>
+
+      <!-- Экран окончания -->
+      <div id="end-screen" class="screen">
+        <h1>🏆 Викторина завершена!</h1>
+        <div class="player-info" style="margin: 20px 0">
+          <span>Ваш результат:</span>
+          <span class="player-score" id="final-score" style="font-size: 1.2rem"
+            >0 бал.</span
+          >
+        </div>
+        <h2 style="margin-bottom: 20px">Итоговый рейтинг:</h2>
+        <div id="final-leaderboard"></div>
+        <button
+          class="btn"
+          onclick="location.reload()"
+          style="margin-top: 20px"
+        >
+          🔄 Заново
+        </button>
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+      let playerName = "";
+      let playerScore = 0;
+      let hasAnswered = false;
+      let timerInterval = null;
+      const QUESTION_TIME = 30;
+      const STORAGE_KEY = "quiz_player_session";
+
+      function showScreen(id) {
+        document
+          .querySelectorAll(".screen")
+          .forEach((s) => s.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      }
+
+      function register(savedData = null) {
+        const input = document.getElementById("player-name");
+
+        if (savedData) {
+          // Восстановление сессии
+          document.getElementById("restore-status").style.display = "block";
+          socket.emit("register", {
+            name: savedData.name,
+            savedId: savedData.playerId,
+          });
+        } else {
+          // Новая регистрация
+          const name = input.value.trim();
+          if (!name) {
+            alert("Введите имя!");
+            return;
+          }
+          playerName = name;
+          socket.emit("register", name);
+        }
+      }
+
+      // Проверяем сохранённую сессию при загрузке
+      function checkSavedSession() {
+        const saved = sessionStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          try {
+            const data = JSON.parse(saved);
+            register(data);
+          } catch (e) {
+            sessionStorage.removeItem(STORAGE_KEY);
+          }
+        }
+      }
+
+      socket.on("registered", (data) => {
+        playerName = data.name;
+        document.getElementById("display-name").textContent = data.name;
+
+        if (data.restored) {
+          document.getElementById("restored-badge").style.display = "inline";
+          document.getElementById("restore-status").textContent =
+            "✅ Сессия восстановлена!";
+        }
+
+        // Сохраняем сессию
+        sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            playerId: data.playerId,
+            name: data.name,
+          }),
+        );
+
+        showScreen("waiting-screen");
+      });
+
+      // Викторина уже запущена, нельзя подключиться
+      socket.on("quiz-already-started", () => {
+        alert("Викторина уже запущена! Подключиться нельзя.");
+        sessionStorage.removeItem(STORAGE_KEY);
+        location.reload();
+      });
+
+      // Викторина готова к началу
+      socket.on("quiz-ready", (data) => {
+        document.getElementById("waiting-text").textContent =
+          `Викторина "${data.name}" готова! Ожидание запуска...`;
+      });
+
+      // Новый вопрос
+      socket.on("new-question", (data) => {
+        hasAnswered = false;
+        document.getElementById("time-up").style.display = "none";
+        document.getElementById("loading-next").style.display = "none";
+        document.getElementById("question-number").textContent =
+          `Вопрос ${data.questionIndex} из ${data.totalQuestions}`;
+        document.getElementById("question-text").textContent = data.text;
+
+        // Картинка
+        const img = document.getElementById("question-image");
+        if (data.image) {
+          img.src = data.image;
+          img.classList.add("show");
+        } else {
+          img.classList.remove("show");
+        }
+
+        // Варианты ответов
+        const optionsContainer = document.getElementById("options-container");
+        optionsContainer.innerHTML = "";
+
+        data.options.forEach((option, index) => {
+          const btn = document.createElement("button");
+          btn.className = "option-btn";
+          btn.textContent = option;
+          btn.onclick = () => submitAnswer(index, btn);
+          optionsContainer.appendChild(btn);
+        });
+
+        // Запуск таймера
+        startTimer(data.timeLeft || QUESTION_TIME);
+
+        showScreen("question-screen");
+      });
+
+      function startTimer(timeLeft) {
+        if (timerInterval) clearInterval(timerInterval);
+
+        const timerText = document.getElementById("timer-text");
+        const timerFill = document.getElementById("timer-fill");
+
+        timerFill.classList.remove("warning", "danger");
+        timerFill.style.width = "100%";
+
+        let remaining = timeLeft;
+        timerText.textContent = remaining;
+
+        timerInterval = setInterval(() => {
+          remaining--;
+          timerText.textContent = remaining;
+
+          const percent = (remaining / timeLeft) * 100;
+          timerFill.style.width = percent + "%";
+
+          if (remaining <= 10 && remaining > 5) {
+            timerFill.classList.add("warning");
+          } else if (remaining <= 5) {
+            timerFill.classList.add("danger");
+          }
+
+          if (remaining <= 0) {
+            clearInterval(timerInterval);
+            timeUp();
+          }
+        }, 1000);
+      }
+
+      function timeUp() {
+        document.getElementById("time-up").style.display = "block";
+        document
+          .querySelectorAll(".option-btn")
+          .forEach((b) => (b.disabled = true));
+
+        // Отправляем на сервер что время вышло - переходим к следующему вопросу
+        socket.emit("time-up");
+      }
+
+      function submitAnswer(index, btn) {
+        if (hasAnswered) return;
+        hasAnswered = true;
+
+        // Блокируем все кнопки
+        document
+          .querySelectorAll(".option-btn")
+          .forEach((b) => (b.disabled = true));
+
+        // Показываем выбор
+        btn.classList.add("selected");
+
+        // Показываем загрузку следующего
+        document.getElementById("loading-next").style.display = "block";
+
+        // Отправляем ответ - сервер сразу отправит следующий вопрос
+        socket.emit("submit-answer", index);
+      }
+
+      socket.on("update-leaderboard", (leaderboard) => {
+        // Обновляем свой счёт
+        const myEntry = leaderboard.find((p) => p.name === playerName);
+        if (myEntry) {
+          playerScore = myEntry.score;
+          document.getElementById("display-score").textContent =
+            `${playerScore} бал.`;
+        }
+
+        // Мини-рейтинг на экране ожидания
+        const miniBoard = document.getElementById("mini-leaderboard");
+        if (leaderboard.length > 0) {
+          miniBoard.innerHTML = `
+          <h3>📊 Рейтинг</h3>
+          ${leaderboard
+            .slice(0, 5)
+            .map(
+              (p, i) => `
+            <div class="leaderboard-item">
+              <span><span class="rank">#${i + 1}</span> ${escapeHtml(p.name)}</span>
+              <span class="score">${p.score}</span>
+            </div>
+          `,
+            )
+            .join("")}
+        `;
+        }
+
+        // Live рейтинг на экране вопроса
+        const liveBoard = document.getElementById("live-leaderboard-content");
+        if (liveBoard && leaderboard.length > 0) {
+          liveBoard.innerHTML = leaderboard
+            .slice(0, 5)
+            .map(
+              (p, i) => `
+            <div class="live-leaderboard-item ${p.name === playerName ? "my-score" : ""}">
+              <span><span class="rank">#${i + 1}</span> ${escapeHtml(p.name)}</span>
+              <span class="score">${p.score}</span>
+            </div>
+          `,
+            )
+            .join("");
+        }
+      });
+
+      // Игрок завершил все вопросы
+      socket.on("player-quiz-ended", (data) => {
+        if (timerInterval) clearInterval(timerInterval);
+
+        document.getElementById("final-score").textContent =
+          `${data.score} бал.`;
+
+        // Запрашиваем общий рейтинг
+        socket.emit("get-final-leaderboard");
+      });
+
+      socket.on("final-leaderboard", (leaderboard) => {
+        const container = document.getElementById("final-leaderboard");
+        container.innerHTML = leaderboard
+          .map(
+            (player, i) => `
+        <div style="padding: 15px; margin: 10px 0; background: #f5f5f5; border-radius: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <span><strong>${i + 1}.</strong> ${escapeHtml(player.name)}</span>
+          <span style="color: #667eea; font-weight: bold;">${player.score} бал.</span>
+        </div>
+      `,
+          )
+          .join("");
+
+        showScreen("end-screen");
+
+        // Очищаем сессию после завершения
+        sessionStorage.removeItem(STORAGE_KEY);
+      });
+
+      socket.on("quiz-stopped", () => {
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById("time-up").style.display = "none";
+        document
+          .querySelectorAll(".option-btn")
+          .forEach((b) => (b.disabled = false));
+        document.getElementById("waiting-text").textContent =
+          "Викторина остановлена ведущим. Ожидание...";
+        showScreen("waiting-screen");
+      });
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Проверяем сессию при загрузке страницы
+      checkSavedSession();
+    </script>
+  </body>
+</html>
