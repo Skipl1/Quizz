@@ -844,6 +844,14 @@
         showScreen("waiting-screen");
       });
 
+      socket.on("quiz-restarted", (data) => {
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById("time-up").style.display = "none";
+        document.getElementById("waiting-text").textContent =
+          `Викторина перезапущена: ${data.name}. Ожидание запуска...`;
+        showScreen("waiting-screen");
+      });
+
       function escapeHtml(text) {
         const div = document.createElement("div");
         div.textContent = text;

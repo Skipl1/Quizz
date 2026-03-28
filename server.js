@@ -354,6 +354,30 @@ io.on("connection", (socket) => {
     console.log(`Выбрана викторина: ${quiz.name}`);
   });
 
+  // Перезапуск викторины (даже если есть игроки)
+  socket.on("restart-quiz", () => {
+    if (!adminSessions[socket.id]) return;
+    if (!currentQuizId) return;
+
+    const quiz = quizzes.find((q) => q.id === currentQuizId);
+    if (!quiz) return;
+
+    quizStarted = false;
+
+    // Сброс всех игроков
+    for (const id in players) {
+      initPlayerQuestions(id, quiz);
+    }
+
+    broadcastLeaderboard();
+    io.emit("quiz-restarted", {
+      quizId: currentQuizId,
+      name: quiz.name,
+      questionsCount: quiz.questions.length,
+    });
+    console.log(`Викторина перезапущена: ${quiz.name}`);
+  });
+
   socket.on("get-quiz-questions", (quizId) => {
     if (!adminSessions[socket.id]) return;
     const quiz = quizzes.find((q) => q.id === quizId);
@@ -389,12 +413,16 @@ io.on("connection", (socket) => {
     const name = typeof data === "string" ? data : data.name;
     const savedId = typeof data === "object" ? data.savedId : null;
 
+    // Если есть сохранённый ID, пытаемся восстановить игрока
     if (savedId && players[savedId]) {
       const player = players[savedId];
+      // Перепривязываем к новому сокету
       players[socket.id] = player;
       delete players[savedId];
 
-      console.log(`Игрок восстановлен: ${player.name}`);
+      console.log(
+        `Игрок восстановлен: ${player.name} (${savedId} → ${socket.id})`,
+      );
       socket.emit("registered", {
         playerId: socket.id,
         name: player.name,
@@ -417,9 +445,51 @@ io.on("connection", (socket) => {
           });
         }
       }
+      broadcastLeaderboard();
       return;
     }
 
+    // Проверяем, есть ли игрок с таким именем (переподключение)
+    const existingPlayer = Object.entries(players).find(
+      ([id, p]) => p.name === name && !p.answeredQuestions.length,
+    );
+
+    if (existingPlayer) {
+      const [oldId, player] = existingPlayer;
+      // Перепривязываем к новому сокету
+      players[socket.id] = player;
+      delete players[oldId];
+
+      console.log(
+        `Игрок переподключён: ${player.name} (${oldId} → ${socket.id})`,
+      );
+      socket.emit("registered", {
+        playerId: socket.id,
+        name: player.name,
+        restored: true,
+      });
+
+      if (currentQuizId && quizStarted && player.currentQuestion) {
+        const quiz = quizzes.find((q) => q.id === currentQuizId);
+        if (quiz) {
+          const question = quiz.questions[player.currentQuestion.originalIndex];
+          socket.emit("new-question", {
+            questionIndex: player.currentQuestion.questionNumber,
+            totalQuestions: quiz.questions.length,
+            text: question.text,
+            type: question.type,
+            options: question.options,
+            correct: question.correct,
+            image: question.image,
+            timeLeft: QUESTION_TIME,
+          });
+        }
+      }
+      broadcastLeaderboard();
+      return;
+    }
+
+    // Новый игрок
     players[socket.id] = {
       name,
       score: 0,
@@ -435,6 +505,8 @@ io.on("connection", (socket) => {
       const quiz = quizzes.find((q) => q.id === currentQuizId);
       if (quiz) initPlayerQuestions(socket.id, quiz);
     }
+
+    broadcastLeaderboard();
   });
 
   socket.on("submit-answer", (answerData) => {

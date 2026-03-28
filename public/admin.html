@@ -1055,6 +1055,13 @@
         document.getElementById("new-quiz-name").value = "";
       }
 
+      // Delete Quiz
+      function deleteQuiz(quizId) {
+        if (confirm("Удалить эту викторину? Это действие нельзя отменить.")) {
+          socket.emit("delete-quiz", quizId);
+        }
+      }
+
       // Open quiz detail
       function openQuizDetail(quizId, quizName) {
         currentQuizId = quizId;
@@ -1176,7 +1183,10 @@
             <div class="name">${q.name}</div>
             <div class="count">${q.questionsCount} вопр.</div>
           </div>
-          <button class="btn btn-small" onclick="event.stopPropagation(); selectQuiz('${q.id}')">Выбрать</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); selectQuiz('${q.id}')">Выбрать</button>
+            <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteQuiz('${q.id}')">Удалить</button>
+          </div>
         </div>
       `,
               )
@@ -1262,8 +1272,18 @@
       }
 
       function stopQuiz() {
-        socket.emit("select-quiz", currentQuizId);
+        socket.emit("restart-quiz");
       }
+
+      socket.on("quiz-restarted", (data) => {
+        document.getElementById("game-status").textContent =
+          'Викторина перезапущена! Нажмите "Запустить" для начала.';
+        document.getElementById("start-btn").disabled = false;
+        document.getElementById("stop-btn").disabled = true;
+        document
+          .getElementById("game-info-card")
+          .classList.remove("quiz-running");
+      });
 
       socket.on("update-leaderboard", (leaderboard) => {
         document.getElementById("players-count").textContent =
