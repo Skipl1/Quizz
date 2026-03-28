@@ -92,6 +92,14 @@
       .btn-secondary {
         background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
       }
+      .btn-icon {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
 
       /* Quiz list */
       .quiz-item {
@@ -103,10 +111,11 @@
         border-radius: 10px;
         margin-bottom: 10px;
         cursor: pointer;
-        transition: background 0.2s;
+        transition: all 0.2s;
       }
       .quiz-item:hover {
         background: #e8e8e8;
+        transform: translateX(5px);
       }
       .quiz-item.active {
         background: #667eea;
@@ -125,65 +134,30 @@
 
       /* Question Type Selector */
       .question-types {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 15px;
+        display: flex;
+        gap: 10px;
         margin-bottom: 20px;
+        flex-wrap: wrap;
       }
       .question-type {
-        padding: 20px;
+        padding: 12px 20px;
         border: 2px solid #e0e0e0;
-        border-radius: 12px;
+        border-radius: 10px;
         cursor: pointer;
         text-align: center;
         transition: all 0.2s;
         background: white;
+        font-size: 0.9rem;
       }
       .question-type:hover {
         border-color: #667eea;
-        transform: translateY(-2px);
       }
       .question-type.selected {
         border-color: #667eea;
         background: #f0f4ff;
       }
       .question-type .icon {
-        font-size: 2rem;
-        margin-bottom: 10px;
-      }
-      .question-type .label {
-        font-weight: 600;
-        color: #333;
-        font-size: 0.9rem;
-      }
-      .question-type .desc {
-        font-size: 0.75rem;
-        color: #999;
-        margin-top: 5px;
-      }
-
-      /* Question Editor */
-      .editor-section {
-        display: none;
-      }
-      .editor-section.active {
-        display: block;
-      }
-
-      .question-input {
-        width: 100%;
-        padding: 20px;
-        border: 2px solid #e0e0e0;
-        border-radius: 12px;
-        font-size: 1.1rem;
-        margin-bottom: 20px;
-        min-height: 100px;
-        resize: vertical;
-        font-family: inherit;
-      }
-      .question-input:focus {
-        outline: none;
-        border-color: #667eea;
+        margin-right: 5px;
       }
 
       /* Answer Cards */
@@ -195,15 +169,11 @@
       }
       .answer-card {
         position: relative;
-        padding: 20px;
+        padding: 15px;
         border-radius: 12px;
-        min-height: 120px;
+        min-height: 100px;
         display: flex;
         flex-direction: column;
-        transition: transform 0.2s;
-      }
-      .answer-card:hover {
-        transform: translateY(-2px);
       }
       .answer-card textarea {
         flex: 1;
@@ -236,9 +206,6 @@
         cursor: pointer;
         font-size: 1rem;
       }
-      .answer-card .card-tools button:hover {
-        background: rgba(255, 255, 255, 0.3);
-      }
       .answer-card .correct-checkbox {
         width: 24px;
         height: 24px;
@@ -258,7 +225,6 @@
         color: #27ae60;
       }
 
-      /* Answer Card Colors */
       .answer-card.blue {
         background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
       }
@@ -279,11 +245,11 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 120px;
+        min-height: 100px;
         border: 2px dashed #ccc;
         border-radius: 12px;
         cursor: pointer;
-        font-size: 2rem;
+        font-size: 1.5rem;
         color: #999;
         transition: all 0.2s;
       }
@@ -301,7 +267,7 @@
       }
       .tf-option {
         flex: 1;
-        padding: 30px;
+        padding: 20px;
         border: 2px solid #e0e0e0;
         border-radius: 12px;
         text-align: center;
@@ -315,12 +281,32 @@
         border-color: #27ae60;
         background: #d4edda;
       }
-      .tf-option .icon {
-        font-size: 2rem;
-        margin-bottom: 10px;
+
+      /* Editor */
+      .editor-section {
+        display: none;
+      }
+      .editor-section.active {
+        display: block;
       }
 
-      /* Image upload */
+      .question-input {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        font-size: 1rem;
+        margin-bottom: 20px;
+        min-height: 80px;
+        resize: vertical;
+        font-family: inherit;
+      }
+      .question-input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      /* Image */
       .media-toolbar {
         display: flex;
         gap: 10px;
@@ -334,12 +320,10 @@
         background: #f5f5f5;
         cursor: pointer;
         font-size: 1.2rem;
-        transition: all 0.2s;
       }
       .media-btn:hover {
         background: #e0e0e0;
       }
-
       .image-preview {
         max-width: 300px;
         max-height: 200px;
@@ -379,7 +363,7 @@
         overflow-y: auto;
       }
       .question-item-card {
-        padding: 20px;
+        padding: 15px;
         background: #f9f9f9;
         border-radius: 12px;
         margin-bottom: 15px;
@@ -388,8 +372,8 @@
         align-items: flex-start;
       }
       .question-item-card .q-number {
-        width: 40px;
-        height: 40px;
+        width: 35px;
+        height: 35px;
         background: #667eea;
         color: white;
         border-radius: 50%;
@@ -404,12 +388,13 @@
       }
       .question-item-card .q-text {
         font-weight: 500;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
       }
       .question-item-card .q-meta {
         display: flex;
         gap: 10px;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: #999;
       }
       .question-item-card .q-actions {
@@ -417,7 +402,7 @@
         gap: 10px;
       }
 
-      /* Game controls */
+      /* Game */
       .game-info {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -445,7 +430,7 @@
       }
       .tab {
         flex: 1;
-        min-width: 120px;
+        min-width: 100px;
         padding: 12px;
         background: #f5f5f5;
         border: none;
@@ -516,33 +501,38 @@
         padding: 40px;
       }
 
-      /* Modal */
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.7);
+      /* Quiz detail view */
+      .quiz-detail {
         display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
       }
-      .modal-overlay.show {
+      .quiz-detail.active {
+        display: block;
+      }
+
+      .quiz-header {
         display: flex;
-      }
-      .modal {
-        background: white;
-        border-radius: 15px;
-        padding: 30px;
-        max-width: 500px;
-        width: 90%;
-        max-height: 80vh;
-        overflow-y: auto;
-      }
-      .modal h3 {
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #eee;
+      }
+      .quiz-header h3 {
+        font-size: 1.4rem;
+        color: #333;
+      }
+
+      .back-btn {
+        background: #f5f5f5;
+        color: #667eea;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .back-btn:hover {
+        background: #e8e8e8;
       }
     </style>
   </head>
@@ -570,9 +560,6 @@
           <button class="tab active" onclick="showTab('quizzes')">
             📚 Мои викторины
           </button>
-          <button class="tab" onclick="showTab('create')">
-            ✏️ Создать вопрос
-          </button>
           <button class="tab" onclick="showTab('play')">🎮 Играть</button>
           <button class="tab" onclick="showTab('leaderboard')">
             📊 Рейтинг
@@ -597,90 +584,71 @@
                 "
               />
               <button class="btn btn-success" onclick="createQuiz()">
-                + Создать
+                + Создать викторину
               </button>
             </div>
             <div id="quizzes-list-container"></div>
           </div>
-        </div>
 
-        <!-- Создание вопроса -->
-        <div id="create-tab" class="editor-section">
-          <div class="card">
-            <h2>📝 Добавить вопрос</h2>
+          <!-- Детали викторины -->
+          <div id="quiz-detail" class="card quiz-detail">
+            <div class="quiz-header">
+              <h3 id="detail-quiz-name">Название викторины</h3>
+              <button class="back-btn" onclick="closeQuizDetail()">
+                ← Назад к списку
+              </button>
+            </div>
 
             <div class="info-box">
               <p>
-                Выберите тип вопроса и заполните поля. Нажмите "Сохранить
-                вопрос" когда закончите.
+                ➕ <strong>Добавить вопрос:</strong> Выберите тип вопроса,
+                заполните текст и варианты ответов, затем нажмите "Сохранить
+                вопрос".
               </p>
             </div>
 
-            <select
-              id="quiz-select-create"
-              style="
-                width: 100%;
-                padding: 12px;
-                border: 2px solid #ddd;
-                border-radius: 8px;
-                margin-bottom: 20px;
-              "
-            >
-              <option value="">Выберите викторину</option>
-            </select>
-
-            <!-- Типы вопросов -->
-            <h3 style="margin-bottom: 15px">Тип вопроса:</h3>
+            <!-- Тип вопроса -->
+            <h4 style="margin-bottom: 10px">Тип вопроса:</h4>
             <div class="question-types">
               <div
                 class="question-type selected"
                 data-type="multiple_choice"
                 onclick="selectQuestionType('multiple_choice')"
               >
-                <div class="icon">☑️</div>
-                <div class="label">Множественный выбор</div>
-                <div class="desc">Один или несколько правильных</div>
+                <span class="icon">☑️</span> Множественный выбор
               </div>
               <div
                 class="question-type"
                 data-type="true_false"
                 onclick="selectQuestionType('true_false')"
               >
-                <div class="icon">⚖️</div>
-                <div class="label">Правда/Ложь</div>
-                <div class="desc">Да/Нет, Правда/Ложь</div>
+                <span class="icon">⚖️</span> Правда/Ложь
               </div>
               <div
                 class="question-type"
                 data-type="fill_blank"
                 onclick="selectQuestionType('fill_blank')"
               >
-                <div class="icon">✏️</div>
-                <div class="label">Заполнить пробел</div>
-                <div class="desc">Вписать текст</div>
+                <span class="icon">✏️</span> Заполнить пробел
               </div>
               <div
                 class="question-type"
                 data-type="open_ended"
                 onclick="selectQuestionType('open_ended')"
               >
-                <div class="icon">📝</div>
-                <div class="label">Открытый вопрос</div>
-                <div class="desc">Развёрнутый ответ</div>
+                <span class="icon">📝</span> Открытый вопрос
               </div>
             </div>
 
-            <!-- Медиа панель -->
+            <!-- Медиа -->
             <div class="media-toolbar">
               <button
                 class="media-btn"
                 onclick="document.getElementById('question-image').click()"
-                title="Добавить картинку"
+                title="Картинка"
               >
                 🖼️
               </button>
-              <button class="media-btn" title="Добавить аудио">🎤</button>
-              <button class="media-btn" title="Добавить видео">📹</button>
             </div>
             <input
               type="file"
@@ -691,82 +659,62 @@
             />
             <img id="image-preview" class="image-preview" />
 
-            <!-- Поле вопроса -->
+            <!-- Текст вопроса -->
             <textarea
               id="question-text"
               class="question-input"
               placeholder="Введите текст вопроса..."
             ></textarea>
 
-            <!-- Варианты для Multiple Choice -->
+            <!-- Multiple Choice -->
             <div id="multiple-choice-editor">
-              <h3 style="margin-bottom: 15px">
-                Варианты ответов (отметьте правильные ✓):
-              </h3>
+              <h4 style="margin-bottom: 10px">
+                Варианты ответов (отметьте ✓ правильные):
+              </h4>
               <div class="answers-grid" id="answers-container">
                 <div class="answer-card blue">
-                  <textarea
-                    placeholder="Введите вариант ответа здесь"
-                  ></textarea>
+                  <textarea placeholder="Вариант 1"></textarea>
                   <div class="card-tools">
-                    <button onclick="removeAnswer(this)" title="Удалить">
-                      🗑️
-                    </button>
+                    <button onclick="removeAnswer(this)">🗑️</button>
                     <button
                       class="correct-checkbox"
                       onclick="toggleCorrect(this)"
-                      title="Правильный"
                     >
                       ✓
                     </button>
                   </div>
                 </div>
                 <div class="answer-card green">
-                  <textarea
-                    placeholder="Введите вариант ответа здесь"
-                  ></textarea>
+                  <textarea placeholder="Вариант 2"></textarea>
                   <div class="card-tools">
-                    <button onclick="removeAnswer(this)" title="Удалить">
-                      🗑️
-                    </button>
+                    <button onclick="removeAnswer(this)">🗑️</button>
                     <button
                       class="correct-checkbox"
                       onclick="toggleCorrect(this)"
-                      title="Правильный"
                     >
                       ✓
                     </button>
                   </div>
                 </div>
                 <div class="answer-card yellow">
-                  <textarea
-                    placeholder="Введите вариант ответа здесь"
-                  ></textarea>
+                  <textarea placeholder="Вариант 3"></textarea>
                   <div class="card-tools">
-                    <button onclick="removeAnswer(this)" title="Удалить">
-                      🗑️
-                    </button>
+                    <button onclick="removeAnswer(this)">🗑️</button>
                     <button
                       class="correct-checkbox"
                       onclick="toggleCorrect(this)"
-                      title="Правильный"
                     >
                       ✓
                     </button>
                   </div>
                 </div>
                 <div class="answer-card red">
-                  <textarea
-                    placeholder="Введите вариант ответа здесь"
-                  ></textarea>
+                  <textarea placeholder="Вариант 4"></textarea>
                   <div class="card-tools">
-                    <button onclick="removeAnswer(this)" title="Удалить">
-                      🗑️
-                    </button>
+                    <button onclick="removeAnswer(this)">🗑️</button>
                     <button
                       class="correct-checkbox"
                       onclick="toggleCorrect(this)"
-                      title="Правильный"
                     >
                       ✓
                     </button>
@@ -778,43 +726,37 @@
 
             <!-- True/False -->
             <div id="true-false-editor" class="hidden">
-              <h3 style="margin-bottom: 15px">Выберите правильный ответ:</h3>
+              <h4 style="margin-bottom: 10px">Правильный ответ:</h4>
               <div class="true-false-options">
                 <div class="tf-option" data-value="0" onclick="selectTF(this)">
-                  <div class="icon">✅</div>
-                  <div>Правда</div>
+                  <div>✅ Правда</div>
                 </div>
                 <div class="tf-option" data-value="1" onclick="selectTF(this)">
-                  <div class="icon">❌</div>
-                  <div>Ложь</div>
+                  <div>❌ Ложь</div>
                 </div>
               </div>
             </div>
 
-            <!-- Fill Blank / Open Ended -->
+            <!-- Text Answer -->
             <div id="text-answer-editor" class="hidden">
-              <h3 style="margin-bottom: 15px">Правильный ответ:</h3>
+              <h4 style="margin-bottom: 10px">Правильный ответ:</h4>
               <input
                 type="text"
                 id="correct-answer-text"
                 placeholder="Введите правильный ответ"
                 style="
                   width: 100%;
-                  padding: 15px;
+                  padding: 12px;
                   border: 2px solid #ddd;
                   border-radius: 8px;
                 "
               />
             </div>
 
-            <!-- Время на ответ -->
-            <h3 style="margin: 20px 0 15px">Время на ответ:</h3>
+            <!-- Время -->
+            <h4 style="margin: 20px 0 15px">Время на ответ:</h4>
             <div class="time-limit-selector">
-              <div
-                class="time-option selected"
-                data-time="5"
-                onclick="selectTime(this)"
-              >
+              <div class="time-option" data-time="5" onclick="selectTime(this)">
                 5 сек
               </div>
               <div
@@ -832,7 +774,7 @@
                 20 сек
               </div>
               <div
-                class="time-option selected"
+                class="time-option"
                 data-time="30"
                 onclick="selectTime(this)"
               >
@@ -852,17 +794,15 @@
               onclick="saveQuestion()"
               style="margin-top: 20px; padding: 18px"
             >
-              💾 Сохранить вопрос
+              💾 Сохранить вопрос в викторину
             </button>
-          </div>
 
-          <!-- Список вопросов в викторине -->
-          <div class="card">
-            <h2>📋 Вопросы в викторине</h2>
+            <!-- Список вопросов -->
+            <h3 style="margin: 30px 0 15px; font-size: 1.2rem">
+              📋 Вопросы в викторине:
+            </h3>
             <div id="questions-list" class="questions-list">
-              <div class="empty-state">
-                Выберите викторину для просмотра вопросов
-              </div>
+              <div class="empty-state">Пока нет вопросов</div>
             </div>
           </div>
         </div>
@@ -873,8 +813,8 @@
             <h2>🎮 Управление игрой</h2>
             <div class="info-box">
               <p>
-                📌 Каждый игрок получает случайные вопросы. На ответ даётся
-                выбранное время. После ответа — сразу следующий вопрос.
+                📌 Каждый игрок получает случайные вопросы. После ответа — сразу
+                следующий вопрос.
               </p>
             </div>
 
@@ -950,8 +890,9 @@
       let currentQuizId = null;
       let imageBase64 = null;
       let selectedQuestionType = "multiple_choice";
-      let selectedTime = 30;
+      let selectedTime = 20;
       let tfSelected = null;
+      const answerColors = ["blue", "green", "yellow", "red", "purple"];
 
       // Login
       function adminLogin() {
@@ -992,7 +933,6 @@
           .querySelector(`.question-type[data-type="${type}"]`)
           .classList.add("selected");
 
-        // Показать нужный редактор
         document
           .getElementById("multiple-choice-editor")
           .classList.add("hidden");
@@ -1007,14 +947,14 @@
           document
             .getElementById("true-false-editor")
             .classList.remove("hidden");
-        } else if (type === "fill_blank" || type === "open_ended") {
+        } else {
           document
             .getElementById("text-answer-editor")
             .classList.remove("hidden");
         }
       }
 
-      // Time selection
+      // Time
       function selectTime(el) {
         selectedTime = parseInt(el.dataset.time);
         document
@@ -1023,7 +963,7 @@
         el.classList.add("selected");
       }
 
-      // TF selection
+      // TF
       function selectTF(el) {
         tfSelected = parseInt(el.dataset.value);
         document
@@ -1032,9 +972,7 @@
         el.classList.add("selected");
       }
 
-      // Answer management
-      const answerColors = ["blue", "green", "yellow", "red", "purple"];
-
+      // Answers
       function addAnswer() {
         const container = document.getElementById("answers-container");
         const addBtn = container.querySelector(".add-answer-btn");
@@ -1044,10 +982,10 @@
         const card = document.createElement("div");
         card.className = `answer-card ${color}`;
         card.innerHTML = `
-        <textarea placeholder="Введите вариант ответа здесь"></textarea>
+        <textarea placeholder="Вариант ${index + 1}"></textarea>
         <div class="card-tools">
-          <button onclick="removeAnswer(this)" title="Удалить">🗑️</button>
-          <button class="correct-checkbox" onclick="toggleCorrect(this)" title="Правильный">✓</button>
+          <button onclick="removeAnswer(this)">🗑️</button>
+          <button class="correct-checkbox" onclick="toggleCorrect(this)">✓</button>
         </div>
       `;
         container.insertBefore(card, addBtn);
@@ -1059,25 +997,20 @@
         if (container.querySelectorAll(".answer-card").length > 2) {
           card.remove();
         } else {
-          alert("Минимум 2 варианта ответа!");
+          alert("Минимум 2 варианта!");
         }
       }
 
       function toggleCorrect(btn) {
-        const type = selectedQuestionType;
-
-        if (type === "multiple_choice") {
+        if (selectedQuestionType === "multiple_choice") {
           btn.classList.toggle("checked");
-        } else if (type === "true_false") {
-          // handled by selectTF
         }
       }
 
-      // Image preview
+      // Image
       function previewImage() {
         const file = document.getElementById("question-image").files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (e) => {
           imageBase64 = e.target.result;
@@ -1088,15 +1021,42 @@
         reader.readAsDataURL(file);
       }
 
-      // Save question
-      function saveQuestion() {
-        const quizId = document.getElementById("quiz-select-create").value;
-        const text = document.getElementById("question-text").value.trim();
+      // Create Quiz
+      function createQuiz() {
+        const name = document.getElementById("new-quiz-name").value.trim();
+        if (!name) {
+          alert("Введите название");
+          return;
+        }
+        socket.emit("create-quiz", { name });
+        document.getElementById("new-quiz-name").value = "";
+      }
 
-        if (!quizId) {
+      // Open quiz detail
+      function openQuizDetail(quizId, quizName) {
+        currentQuizId = quizId;
+        document.getElementById("detail-quiz-name").textContent = quizName;
+        document.getElementById("quizzes-list-container").style.display =
+          "none";
+        document.getElementById("quiz-detail").classList.add("active");
+        socket.emit("get-quiz-questions", quizId);
+      }
+
+      function closeQuizDetail() {
+        document.getElementById("quiz-detail").classList.remove("active");
+        document.getElementById("quizzes-list-container").style.display =
+          "block";
+        currentQuizId = null;
+      }
+
+      // Save Question
+      function saveQuestion() {
+        if (!currentQuizId) {
           alert("Выберите викторину");
           return;
         }
+
+        const text = document.getElementById("question-text").value.trim();
         if (!text) {
           alert("Введите текст вопроса");
           return;
@@ -1109,7 +1069,7 @@
           const cards = document.querySelectorAll(
             "#answers-container .answer-card",
           );
-          cards.forEach((card, i) => {
+          cards.forEach((card) => {
             const textarea = card.querySelector("textarea");
             const checkbox = card.querySelector(".correct-checkbox");
             if (textarea.value.trim()) {
@@ -1120,29 +1080,26 @@
             }
           });
           if (options.length < 2) {
-            alert("Минимум 2 варианта ответа");
+            alert("Минимум 2 варианта");
             return;
           }
           if (correct.length === 0) {
-            alert("Выберите хотя бы один правильный ответ");
+            alert("Выберите правильный ответ");
             return;
           }
         } else if (selectedQuestionType === "true_false") {
           options = ["Правда", "Ложь"];
           if (tfSelected === null) {
-            alert("Выберите правильный ответ");
+            alert("Выберите ответ");
             return;
           }
           correct = [tfSelected];
-        } else if (
-          selectedQuestionType === "fill_blank" ||
-          selectedQuestionType === "open_ended"
-        ) {
+        } else {
           const answer = document
             .getElementById("correct-answer-text")
             .value.trim();
           if (!answer) {
-            alert("Введите правильный ответ");
+            alert("Введите ответ");
             return;
           }
           options = [answer];
@@ -1150,7 +1107,7 @@
         }
 
         socket.emit("add-question", {
-          quizId,
+          quizId: currentQuizId,
           text,
           type: selectedQuestionType,
           options,
@@ -1159,7 +1116,7 @@
           timeLimit: selectedTime,
         });
 
-        // Reset form
+        // Reset
         document.getElementById("question-text").value = "";
         document.getElementById("question-image").value = "";
         document.getElementById("image-preview").classList.remove("show");
@@ -1170,18 +1127,13 @@
           .querySelectorAll(".tf-option")
           .forEach((t) => t.classList.remove("selected"));
 
-        alert("Вопрос сохранён!");
-      }
-
-      socket.on("question-added", () => {
-        socket.emit("get-quiz-questions", currentQuizId);
-      });
-
-      // Quiz management
-      function createQuiz() {
-        const name = document.getElementById("new-quiz-name").value.trim();
-        socket.emit("create-quiz", { name });
-        document.getElementById("new-quiz-name").value = "";
+        // Reset answers
+        document
+          .querySelectorAll("#answers-container .answer-card")
+          .forEach((card, i) => {
+            card.querySelector("textarea").value = "";
+            card.querySelector(".correct-checkbox").classList.remove("checked");
+          });
       }
 
       socket.on("quiz-created", () => {
@@ -1190,30 +1142,23 @@
 
       socket.on("quizzes-list", (quizzes) => {
         const list = document.getElementById("quizzes-list-container");
-        const select = document.getElementById("quiz-select-create");
         const gameList = document.getElementById("game-quiz-list");
 
         list.innerHTML = quizzes.length
           ? quizzes
               .map(
                 (q) => `
-        <div class="quiz-item" onclick="selectQuizForEdit('${q.id}')">
-          <span class="name">${q.name}</span>
-          <span class="count">${q.questionsCount} вопр.</span>
+        <div class="quiz-item" onclick="openQuizDetail('${q.id}', '${q.name}')">
+          <div>
+            <div class="name">${q.name}</div>
+            <div class="count">${q.questionsCount} вопр.</div>
+          </div>
+          <button class="btn btn-small" onclick="event.stopPropagation(); selectQuiz('${q.id}')">Выбрать</button>
         </div>
       `,
               )
               .join("")
           : '<div class="empty-state">Нет викторин. Создайте первую!</div>';
-
-        select.innerHTML =
-          '<option value="">Выберите викторину</option>' +
-          quizzes
-            .map(
-              (q) =>
-                `<option value="${q.id}">${q.name} (${q.questionsCount} вопр.)</option>`,
-            )
-            .join("");
 
         gameList.innerHTML = quizzes
           .map(
@@ -1227,18 +1172,15 @@
           .join("");
       });
 
-      function selectQuizForEdit(quizId) {
-        currentQuizId = quizId;
-        document.getElementById("quiz-select-create").value = quizId;
-        socket.emit("get-quiz-questions", quizId);
-        showTab("create");
-      }
+      socket.on("question-added", () => {
+        socket.emit("get-quiz-questions", currentQuizId);
+      });
 
       socket.on("quiz-questions", (data) => {
         const container = document.getElementById("questions-list");
         if (data.questions.length === 0) {
           container.innerHTML =
-            '<div class="empty-state">Пока нет вопросов</div>';
+            '<div class="empty-state">Пока нет вопросов. Добавьте первый!</div>';
           return;
         }
 
@@ -1252,7 +1194,6 @@
             <div class="q-meta">
               <span>📝 ${q.type}</span>
               <span>⏱️ ${q.timeLimit || 30} сек</span>
-              <span>🖼️ ${q.image ? "Есть" : "Нет"}</span>
             </div>
           </div>
           <div class="q-actions">
@@ -1265,7 +1206,7 @@
       });
 
       function deleteQuestion(index) {
-        if (confirm("Удалить этот вопрос?")) {
+        if (confirm("Удалить вопрос?")) {
           socket.emit("delete-question", {
             quizId: currentQuizId,
             questionIndex: index,
@@ -1288,8 +1229,6 @@
         document
           .getElementById("game-info-card")
           .classList.remove("quiz-running");
-        document.getElementById("game-status").textContent =
-          'Викторина выбрана. Нажмите "Запустить" для начала.';
       });
 
       function startQuiz() {
@@ -1297,14 +1236,10 @@
         document.getElementById("start-btn").disabled = true;
         document.getElementById("stop-btn").disabled = false;
         document.getElementById("game-info-card").classList.add("quiz-running");
-        document.getElementById("game-status").textContent =
-          "Викторина запущена!";
       }
 
       function stopQuiz() {
         socket.emit("select-quiz", currentQuizId);
-        document.getElementById("game-status").textContent =
-          "Перезапустите для начала.";
       }
 
       socket.on("update-leaderboard", (leaderboard) => {

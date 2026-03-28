@@ -244,7 +244,7 @@ io.on("connection", (socket) => {
       try {
         const orderIndex = quiz.questions.length;
         await pool.query(
-          "INSERT INTO questions (quiz_id, text, type, options, correct, image, order_index) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          "INSERT INTO questions (quiz_id, text, type, options, correct, image, time_limit, order_index) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
           [
             quiz.dbId,
             data.text,
@@ -252,6 +252,7 @@ io.on("connection", (socket) => {
             JSON.stringify(data.options),
             JSON.stringify(data.correct),
             data.image || null,
+            data.timeLimit || QUESTION_TIME,
             orderIndex,
           ],
         );
