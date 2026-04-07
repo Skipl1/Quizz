@@ -1,8 +1,13 @@
+require("dotenv").config();
 const { Pool } = require("pg");
 
-// Вставьте ваш DATABASE_URL из Render
-const DATABASE_URL =
-  "postgresql://data:ZzolaOF9eI79WE8oa8NbqCmxKXw6YqFg@dpg-d73qtjggjchc73as75bg-a.frankfurt-postgres.render.com:5432/data_wtak?ssl=true";
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error("❌ Ошибка: DATABASE_URL не установлен.");
+  console.error("   Создайте файл .env на основе .env.example");
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,

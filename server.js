@@ -1,26 +1,80 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// === RATE LIMITING ===
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много запросов, попробуйте позже" },
+});
+app.use(limiter);
+
+// Socket.IO rate limiting
+const socketRateLimit = new Map();
+const SOCKET_RATE_WINDOW_MS = 10_000; // 10 seconds
+const SOCKET_RATE_MAX_EVENTS = 30;
+
+io.use((socket, next) => {
+  socketRateLimit.set(socket.id, { count: 0, resetAt: Date.now() + SOCKET_RATE_WINDOW_MS });
+  next();
+});
+
+function checkSocketRateLimit(socket) {
+  const record = socketRateLimit.get(socket.id);
+  if (!record) return true;
+  if (Date.now() > record.resetAt) {
+    socketRateLimit.set(socket.id, { count: 1, resetAt: Date.now() + SOCKET_RATE_WINDOW_MS });
+    return true;
+  }
+  record.count++;
+  if (record.count > SOCKET_RATE_MAX_EVENTS) {
+    socket.disconnect(true);
+    console.log(`Клиент отключён за превышение лимита событий: ${socket.id}`);
+    return false;
+  }
+  return true;
+}
+
+// === INPUT SANITIZATION ===
+function sanitizeInput(str, maxLength = 500) {
+  if (typeof str !== "string") return "";
+  return str
+    .trim()
+    .slice(0, maxLength)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 // Парсинг JSON
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
 
-// Админские учётные данные
+// Админские учётные данные из переменных окружения
 const ADMIN_CREDENTIALS = {
-  login: "admin",
-  password: "admin123",
+  login: process.env.ADMIN_LOGIN || "admin",
+  password: process.env.ADMIN_PASSWORD || "admin123",
 };
 
-// Подключение к PostgreSQL (Render автоматически предоставляет DATABASE_URL)
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://data:ZzolaOF9eI79WE8oa8NbqCmxKXw6YqFg@dpg-d73qtjggjchc73as75bg-a.frankfurt-postgres.render.com:5432/data_wtak?sslmode=require";
+// Подключение к PostgreSQL только из переменной окружения
+const DATABASE_URL = process.env.DATABASE_URL || null;
+
+if (!DATABASE_URL) {
+  console.log("⚠️ DATABASE_URL не установлен. Работа в режиме RAM (без БД).");
+  console.log("   Для подключения создайте файл .env (см. .env.example)");
+}
 
 const pool = DATABASE_URL
   ? new Pool({
@@ -225,9 +279,12 @@ io.on("connection", (socket) => {
   // === АДМИН ===
 
   socket.on("admin-login", (data, callback) => {
+    if (!checkSocketRateLimit(socket)) return;
+    const login = sanitizeInput(data.login, 100);
+    const password = data.password; // не санитизируем пароль
     if (
-      data.login === ADMIN_CREDENTIALS.login &&
-      data.password === ADMIN_CREDENTIALS.password
+      login === ADMIN_CREDENTIALS.login &&
+      password === ADMIN_CREDENTIALS.password
     ) {
       adminSessions[socket.id] = true;
       callback({ success: true });
@@ -251,18 +308,21 @@ io.on("connection", (socket) => {
 
   // Создать викторину
   socket.on("create-quiz", async (data) => {
+    if (!checkSocketRateLimit(socket)) return;
     if (!adminSessions[socket.id]) return;
+
+    const quizName = sanitizeInput(data?.name, 200) || "Новая викторина";
 
     if (pool) {
       try {
         const result = await pool.query(
           "INSERT INTO quizzes (name) VALUES ($1) RETURNING id",
-          [data.name || "Новая викторина"],
+          [quizName],
         );
         const newQuiz = {
           id: `db-${result.rows[0].id}`,
           dbId: result.rows[0].id,
-          name: data.name || "Новая викторина",
+          name: quizName,
           questions: [],
         };
         quizzes.push(newQuiz);
@@ -281,7 +341,7 @@ io.on("connection", (socket) => {
     } else {
       const newQuiz = {
         id: "quiz-" + Date.now(),
-        name: data.name || "Новая викторина",
+        name: quizName,
         questions: [],
       };
       quizzes.push(newQuiz);
@@ -304,10 +364,16 @@ io.on("connection", (socket) => {
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz) return;
 
+    // Sanitize text and options
+    const sanitizedText = sanitizeInput(data.text, 2000);
+    const sanitizedOptions = Array.isArray(data.options)
+      ? data.options.map(opt => typeof opt === 'string' ? sanitizeInput(opt, 500) : opt)
+      : data.options;
+
     const questionData = {
-      text: data.text,
+      text: sanitizedText,
       type: data.type || "multiple_choice",
-      options: data.options,
+      options: sanitizedOptions,
       correct: data.correct,
       image: data.image || null,
       timeLimit: data.timeLimit || QUESTION_TIME,
@@ -383,10 +449,16 @@ io.on("connection", (socket) => {
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz || !quiz.questions[data.questionIndex]) return;
 
+    // Sanitize text and options
+    const sanitizedText = sanitizeInput(data.text, 2000);
+    const sanitizedOptions = Array.isArray(data.options)
+      ? data.options.map(opt => typeof opt === 'string' ? sanitizeInput(opt, 500) : opt)
+      : data.options;
+
     const questionData = {
-      text: data.text,
+      text: sanitizedText,
       type: data.type || "multiple_choice",
-      options: data.options,
+      options: sanitizedOptions,
       correct: data.correct,
       image: data.image || null,
       timeLimit: data.timeLimit || QUESTION_TIME,
@@ -528,13 +600,20 @@ io.on("connection", (socket) => {
   // === ИГРОК ===
 
   socket.on("register", (data) => {
+    if (!checkSocketRateLimit(socket)) return;
     if (quizStarted) {
       socket.emit("quiz-already-started");
       return;
     }
 
-    const name = typeof data === "string" ? data : data.name;
+    const rawName = typeof data === "string" ? data : data.name;
+    const name = sanitizeInput(rawName, 50);
     const savedId = typeof data === "object" ? data.savedId : null;
+
+    if (!name) {
+      socket.emit("registered", { playerId: null, name: "", error: "Имя не может быть пустым" });
+      return;
+    }
 
     // Если есть сохранённый ID, пытаемся восстановить игрока
     if (savedId && players[savedId]) {
@@ -657,10 +736,11 @@ io.on("connection", (socket) => {
       } else if (answerData.type === "matching") {
         isCorrect = answerData.correct;
       } else if (answerData.type === "text") {
-        // Текстовый ответ - сравнение без учёта регистра
+        // Текстовый ответ - сравнение без учёта регистра, санитизируем
+        const userAnswer = sanitizeInput(answerData.answer, 500).toLowerCase().trim();
         const correctAnswer = question.options[0] || "";
         isCorrect =
-          answerData.answer.toLowerCase().trim() ===
+          userAnswer ===
           correctAnswer.toLowerCase().trim();
       }
     } else if (Array.isArray(answerData)) {
@@ -836,7 +916,6 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`Сервер запущен на порту ${PORT}`);
   console.log(`Игроки: http://localhost:${PORT}`);
   console.log(`Админ: http://localhost:${PORT}/admin.html`);
-  console.log(`Логин/пароль админа: admin / admin123`);
 });
 
 server.on("error", (err) => {
