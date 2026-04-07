@@ -1,0 +1,42 @@
+{
+  "general": {
+    "vimMode": false,
+    "preferredEditor": "code"
+  },
+  "ui": {
+    "theme": "GitHub",
+    "hideTips": false,
+    "customWittyPhrases": [
+      "Архитектура — это искусство того, что нельзя забыть",
+      "Квиз сам себя не адаптирует, но мы поможем",
+      "Подключение к ИИ-оркестратору..."
+    ]
+  },
+  "tools": {
+    "approvalMode": "yolo",
+    "exclude": []
+  },
+  "mcpServers": {},
+  "model": {
+    "name": "coder-model",
+    "maxSessionTurns": 1000,
+    "enableOpenAILogging": false
+    },
+  "context": {
+    "fileName": [ "QWEN.md",".qwen/agents/*.md" ],
+    "includeDirectories": [
+      "public"
+    ],
+    "loadFromIncludeDirectories": true,
+    "fileFiltering": {
+      "respectGitIgnore": true
+    }
+  },
+  "advanced": {
+    "excludedEnvVars": [
+      "DEBUG",
+      "NODE_ENV"
+    ]
+  },
+  "$version": 3
+}
