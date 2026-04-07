@@ -1070,6 +1070,13 @@
               </div>
               <div
                 class="question-type"
+                data-type="open_ended"
+                onclick="selectQuestionType('open_ended')"
+              >
+                Развёрнутый ответ
+              </div>
+              <div
+                class="question-type"
                 data-type="ordering"
                 onclick="selectQuestionType('ordering')"
               >
@@ -2095,9 +2102,9 @@
             <div class="q-content">
               <div class="q-text">${escapeHtml(q.text)}</div>
               <div class="q-meta">
-                <span>${q.type}</span>
+                <span>${q.type === 'open_ended' ? 'Развёрнутый ответ' : q.type === 'fill_blank' ? 'Заполнить пробел' : q.type === 'true_false' ? 'Правда/Ложь' : q.type === 'ordering' ? 'Порядок' : q.type === 'matching' ? 'Соответствие' : 'Множественный выбор'}</span>
                 <span>${q.timeLimit || 30} сек</span>
-                <span>${q.answerType === "multiple" ? "Несколько ответов" : q.answerType === "any" ? "Один или несколько" : "Один ответ"}</span>
+                ${q.type === 'multiple_choice' ? `<span>${q.answerType === "multiple" ? "Несколько ответов" : q.answerType === "any" ? "Один или несколько" : "Один ответ"}</span>` : ''}
               </div>
             </div>
             <div class="q-actions">

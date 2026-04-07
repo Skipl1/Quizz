@@ -386,9 +386,9 @@ io.on("connection", (socket) => {
           "INSERT INTO questions (quiz_id, text, type, options, correct, image, time_limit, order_index) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
           [
             quiz.dbId,
-            data.text,
+            sanitizedText,
             data.type || "multiple_choice",
-            JSON.stringify(data.options),
+            JSON.stringify(sanitizedOptions),
             JSON.stringify(data.correct),
             data.image || null,
             data.timeLimit || QUESTION_TIME,
@@ -472,9 +472,9 @@ io.on("connection", (socket) => {
           await pool.query(
             "UPDATE questions SET text = $1, type = $2, options = $3, correct = $4, image = $5, time_limit = $6 WHERE id = $7",
             [
-              data.text,
+              sanitizedText,
               data.type || "multiple_choice",
-              JSON.stringify(data.options),
+              JSON.stringify(sanitizedOptions),
               JSON.stringify(data.correct),
               data.image || null,
               data.timeLimit || QUESTION_TIME,
@@ -573,6 +573,9 @@ io.on("connection", (socket) => {
     console.log(`Викторина перезапущена: ${quiz.name}`);
   });
 
+  // NOTE: `quiz-stopped` event is listened to by players (index.html:1605) but never emitted.
+  // TODO: Implement admin "stop quiz" functionality and emit this event when needed.
+  
   socket.on("get-quiz-questions", (quizId) => {
     if (!adminSessions[socket.id]) return;
     const quiz = quizzes.find((q) => q.id === quizId);
@@ -717,6 +720,9 @@ io.on("connection", (socket) => {
     if (!player.currentQuestion) return;
     if (player.answeredQuestions.includes(player.currentQuestion.originalIndex))
       return;
+    // Deduplication guard to prevent race conditions (submit-answer + time-up)
+    if (player.isProcessingAnswer) return;
+    player.isProcessingAnswer = true;
 
     const quiz = quizzes.find((q) => q.id === currentQuizId);
     if (!quiz) return;
@@ -757,7 +763,8 @@ io.on("connection", (socket) => {
       const timeSpent = player.questionStartTime
         ? (Date.now() - player.questionStartTime) / 1000
         : QUESTION_TIME;
-      const bonus = Math.max(0, Math.floor((QUESTION_TIME - timeSpent) / 3));
+      const timeLimit = question.timeLimit || QUESTION_TIME;
+      const bonus = Math.max(0, Math.floor((timeLimit - timeSpent) / 3));
       player.score += 10 + bonus;
       console.log(
         `Игрок ${player.name} ответил правильно! +${10 + bonus} баллов`,
@@ -765,6 +772,7 @@ io.on("connection", (socket) => {
     }
 
     player.answeredQuestions.push(player.currentQuestion.originalIndex);
+    player.isProcessingAnswer = false; // Reset guard
     broadcastLeaderboard();
 
     setTimeout(() => {
