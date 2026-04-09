@@ -2633,19 +2633,49 @@
 
         const reader = new FileReader();
         reader.onload = function (e) {
-          const row = input.closest(".answer-row");
-          row.dataset.image = e.target.result;
+          // Сжимаем изображение через Canvas
+          compressImage(e.target.result, 400, 0.7, (compressedBase64) => {
+            const row = input.closest(".answer-row");
+            row.dataset.image = compressedBase64;
 
-          // Показываем превью
-          const preview = row.querySelector(".answer-image-preview");
-          preview.src = e.target.result;
-          preview.style.display = "block";
+            // Показываем превью
+            const preview = row.querySelector(".answer-image-preview");
+            preview.src = compressedBase64;
+            preview.style.display = "block";
 
-          // Скрываем кнопку добавления
-          const addBtn = row.querySelector(".answer-image-btn");
-          addBtn.style.display = "none";
+            // Скрываем кнопку добавления
+            const addBtn = row.querySelector(".answer-image-btn");
+            addBtn.style.display = "none";
+          });
         };
         reader.readAsDataURL(file);
+      }
+
+      // Сжатие изображения через Canvas
+      function compressImage(base64, maxWidth, quality, callback) {
+        const img = new Image();
+        img.onload = function () {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Масштабируем до maxWidth
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Конвертируем в base64 с сжатием JPEG
+          const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+          callback(compressedBase64);
+        };
+        img.src = base64;
       }
 
       function removeAnswerImagePreview(img) {
@@ -2763,12 +2793,15 @@
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
-          imageBase64 = e.target.result;
-          const img = document.getElementById("image-preview");
-          img.src = imageBase64;
-          document
-            .getElementById("image-preview-container")
-            .classList.add("show");
+          // Сжимаем изображение вопроса
+          compressImage(e.target.result, 600, 0.8, (compressedBase64) => {
+            imageBase64 = compressedBase64;
+            const img = document.getElementById("image-preview");
+            img.src = compressedBase64;
+            document
+              .getElementById("image-preview-container")
+              .classList.add("show");
+          });
         };
         reader.readAsDataURL(file);
       }
