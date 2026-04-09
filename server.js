@@ -21,8 +21,8 @@ app.use(limiter);
 
 // Socket.IO rate limiting
 const socketRateLimit = new Map();
-const SOCKET_RATE_WINDOW_MS = 10_000; // 10 seconds
-const SOCKET_RATE_MAX_EVENTS = 30;
+const SOCKET_RATE_WINDOW_MS = Number(process.env.SOCKET_RATE_WINDOW_MS) || 10_000;
+const SOCKET_RATE_MAX_EVENTS = Number(process.env.SOCKET_RATE_MAX_EVENTS) || 30;
 
 io.use((socket, next) => {
   socketRateLimit.set(socket.id, { count: 0, resetAt: Date.now() + SOCKET_RATE_WINDOW_MS });
@@ -65,7 +65,7 @@ app.use(express.static("public"));
 // Админские учётные данные из переменных окружения
 const ADMIN_CREDENTIALS = {
   login: process.env.ADMIN_LOGIN || "admin",
-  password: process.env.ADMIN_PASSWORD || "admin123",
+  password: process.env.ADMIN_PASSWORD || "CHANGE_ME_set_in_env",
 };
 
 // Подключение к PostgreSQL только из переменной окружения
@@ -82,7 +82,7 @@ const pool = DATABASE_URL
       ssl: {
         rejectUnauthorized: false,
       },
-      connectionTimeoutMillis: 30000,
+      connectionTimeoutMillis: 60000, // 60s для Render (пробуждение БД)
       idleTimeoutMillis: 60000,
       statementTimeoutMillis: 30000,
       max: 5,
@@ -140,8 +140,9 @@ async function initDatabase() {
   }
 
   try {
-    // Проверяем подключение перед выполнением запросов
+    console.log("🔄 Подключение к БД... (может занять до 60с при «пробуждении» Render)");
     await pool.query("SELECT NOW()");
+    console.log("✅ БД подключена");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS quizzes (
@@ -159,7 +160,9 @@ async function initDatabase() {
         options JSONB,
         correct JSONB,
         image TEXT,
-        order_index INTEGER DEFAULT 0
+        order_index INTEGER DEFAULT 0,
+        time_limit INTEGER DEFAULT 30,
+        order_answer JSONB
       )
     `);
     console.log("База данных подключена и готова.");
@@ -167,8 +170,17 @@ async function initDatabase() {
     // Загрузка викторин из БД
     await loadQuizzesFromDB();
   } catch (err) {
-    console.error("Ошибка подключения к БД:", err.message);
-    console.log("Работа в режиме RAM (без подключения к БД)");
+    console.error("❌ Ошибка подключения к БД:", err.message);
+    console.error("   Код ошибки:", err.code || "нет кода");
+    if (err.message.includes("timeout")) {
+      console.error("   ⏱  Таймаут — Render БД «спит». Подождите 30-60с и перезапустите сервер.");
+      console.error("   💡 Или проверьте DATABASE_URL в .env файле.");
+    } else if (err.message.includes("password")) {
+      console.error("   🔑 Неверный логин или пароль. Проверьте DATABASE_URL.");
+    } else if (err.message.includes("does not exist")) {
+      console.error("   🗄  База данных не существует. Проверьте настройки на Render.");
+    }
+    console.log("⚠️ Работа в режиме RAM (без подключения к БД)");
   }
 }
 
@@ -426,7 +438,11 @@ io.on("connection", (socket) => {
     if (pool && quiz.dbId) {
       const q = quiz.questions[data.questionIndex];
       if (q.id) {
-        await pool.query("DELETE FROM questions WHERE id = $1", [q.id]);
+        try {
+          await pool.query("DELETE FROM questions WHERE id = $1", [q.id]);
+        } catch (err) {
+          console.error("Ошибка удаления вопроса из БД:", err.message);
+        }
       }
     }
 
@@ -814,6 +830,8 @@ io.on("connection", (socket) => {
       delete adminSessions[socket.id];
       console.log("Админ отключился");
     }
+    // Очистка rate limit записи
+    socketRateLimit.delete(socket.id);
   });
 });
 
@@ -823,6 +841,7 @@ function initPlayerQuestions(playerId, quiz) {
   players[playerId].answeredQuestions = [];
   players[playerId].currentQuestion = null;
   players[playerId].score = 0;
+  players[playerId].isProcessingAnswer = false;
 }
 
 function sendNextQuestionToPlayer(playerId, quiz) {
@@ -919,7 +938,7 @@ function broadcastLeaderboard() {
 // Инициализация и запуск
 initDatabase();
 
-const PORT = process.env.PORT || 3003;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Сервер запущен на порту ${PORT}`);
   console.log(`Игроки: http://localhost:${PORT}`);
