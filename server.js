@@ -391,11 +391,18 @@ io.on("connection", (socket) => {
     if (!quiz) return;
 
     // Sanitize text and options
-    const sanitizedText = sanitizeInput(data.text, 2000);
+    const sanitizedText = sanitizeInput(data.text || "", 2000);
     const sanitizedOptions = Array.isArray(data.options)
-      ? data.options.map((opt) =>
-          typeof opt === "string" ? sanitizeInput(opt, 500) : opt,
-        )
+      ? data.options.map((opt) => {
+          // Поддержка как строк так и объектов {text, image}
+          if (typeof opt === "object" && opt !== null) {
+            return {
+              text: sanitizeInput(opt.text || "", 500),
+              image: typeof opt.image === "string" ? opt.image : null,
+            };
+          }
+          return typeof opt === "string" ? sanitizeInput(opt, 500) : opt;
+        })
       : data.options;
 
     const questionData = {
@@ -482,11 +489,18 @@ io.on("connection", (socket) => {
     if (!quiz || !quiz.questions[data.questionIndex]) return;
 
     // Sanitize text and options
-    const sanitizedText = sanitizeInput(data.text, 2000);
+    const sanitizedText = sanitizeInput(data.text || "", 2000);
     const sanitizedOptions = Array.isArray(data.options)
-      ? data.options.map((opt) =>
-          typeof opt === "string" ? sanitizeInput(opt, 500) : opt,
-        )
+      ? data.options.map((opt) => {
+          // Поддержка как строк так и объектов {text, image}
+          if (typeof opt === "object" && opt !== null) {
+            return {
+              text: sanitizeInput(opt.text || "", 500),
+              image: typeof opt.image === "string" ? opt.image : null,
+            };
+          }
+          return typeof opt === "string" ? sanitizeInput(opt, 500) : opt;
+        })
       : data.options;
 
     const questionData = {
@@ -870,7 +884,12 @@ io.on("connection", (socket) => {
         const userAnswer = sanitizeInput(answerData.answer, 500)
           .toLowerCase()
           .trim();
-        const correctAnswer = question.options[0] || "";
+        // Поддержка как строк так и объектов {text, image}
+        const correctOption = question.options[0];
+        const correctAnswer =
+          typeof correctOption === "object"
+            ? correctOption.text || ""
+            : correctOption || "";
         pointsEarned =
           userAnswer === correctAnswer.toLowerCase().trim() ? 1 : 0;
       }

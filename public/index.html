@@ -1139,7 +1139,15 @@
 
         document.getElementById("question-number").textContent =
           `Вопрос ${data.questionIndex} из ${data.totalQuestions}`;
-        document.getElementById("question-text").textContent = data.text;
+
+        // Текст вопроса может быть пустым, если есть картинка
+        const questionTextEl = document.getElementById("question-text");
+        if (data.text) {
+          questionTextEl.textContent = data.text;
+          questionTextEl.style.display = "block";
+        } else {
+          questionTextEl.style.display = "none";
+        }
         currentQuestionType = data.type || "multiple_choice";
 
         // Очищаем текстовое поле
@@ -1220,6 +1228,7 @@
       function renderMultipleChoice(options) {
         const container = document.getElementById("options-container");
         container.style.display = "flex";
+        container.style.flexDirection = "column";
         selectedMCIndex = null;
         const submitBtn = document.getElementById("submit-mc-btn");
         submitBtn.style.display = "block";
@@ -1228,7 +1237,27 @@
         options.forEach((option, index) => {
           const btn = document.createElement("button");
           btn.className = "option-btn";
-          btn.textContent = option;
+
+          // Поддержка как строк так и объектов {text, image}
+          const optText =
+            typeof option === "object" ? option.text || "" : option;
+          const optImage =
+            typeof option === "object" ? option.image || null : null;
+
+          if (optImage) {
+            if (optText) {
+              btn.innerHTML = `<img src="${optImage}" style="max-width:100%;max-height:120px;object-fit:contain;border-radius:8px;margin-bottom:0.5rem;" /><span>${escapeHtml(optText)}</span>`;
+            } else {
+              // Только картинка без текста
+              btn.innerHTML = `<img src="${optImage}" style="max-width:100%;max-height:150px;object-fit:contain;border-radius:8px;" />`;
+            }
+            btn.style.flexDirection = "column";
+            btn.style.alignItems = "center";
+            btn.style.textAlign = "center";
+          } else {
+            btn.textContent = optText;
+          }
+
           btn.onclick = () => selectMultipleChoice(index, btn);
           container.appendChild(btn);
         });

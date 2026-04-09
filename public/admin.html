@@ -431,9 +431,38 @@
         flex-shrink: 0;
       }
 
+      .answer-row .row-actions .answer-image-btn {
+        background: rgba(139, 92, 246, 0.1);
+      }
+
+      .answer-row .row-actions .answer-image-btn:hover {
+        background: rgba(139, 92, 246, 0.25);
+        color: var(--accent);
+      }
+
       .answer-row .row-actions button:hover {
         background: rgba(239, 68, 68, 0.2);
         color: var(--danger);
+      }
+
+      .answer-row .row-actions .correct-checkbox:hover {
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--success);
+      }
+
+      .answer-row .answer-image-preview {
+        width: 32px;
+        height: 32px;
+        object-fit: cover;
+        border-radius: 6px;
+        cursor: pointer;
+        border: 2px solid var(--border);
+        transition: all 0.2s;
+      }
+
+      .answer-row .answer-image-preview:hover {
+        border-color: var(--danger);
+        transform: scale(1.05);
       }
 
       .answer-card .correct-checkbox {
@@ -1454,7 +1483,7 @@
               <!-- Текст вопроса -->
               <textarea
                 id="question-text"
-                placeholder="Введите текст вопроса..."
+                placeholder="Введите текст вопроса (необязательно, если есть изображение)..."
                 style="margin-top: 1rem"
               ></textarea>
             </div>
@@ -1572,12 +1601,56 @@
                   id="answers-container"
                   style="margin-top: 0.75rem"
                 >
-                  <div class="answer-row">
+                  <div class="answer-row" data-image="">
                     <span class="answer-number">1</span>
                     <textarea
-                      placeholder="Введите вариант ответа..."
+                      placeholder="Текст варианта (необязательно, если есть изображение)..."
                     ></textarea>
                     <div class="row-actions">
+                      <button
+                        class="answer-image-btn"
+                        onclick="addAnswerImage(this)"
+                        title="Добавить изображение"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <rect
+                            x="3"
+                            y="3"
+                            width="18"
+                            height="18"
+                            rx="2"
+                            ry="2"
+                          />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        onchange="handleAnswerImage(this)"
+                      />
+                      <img
+                        class="answer-image-preview"
+                        style="
+                          display: none;
+                          width: 32px;
+                          height: 32px;
+                          object-fit: cover;
+                          border-radius: 4px;
+                          cursor: pointer;
+                        "
+                        onclick="removeAnswerImagePreview(this)"
+                        title="Удалить изображение"
+                      />
                       <button
                         class="correct-checkbox"
                         onclick="toggleCorrect(this)"
@@ -1609,12 +1682,56 @@
                       </button>
                     </div>
                   </div>
-                  <div class="answer-row">
+                  <div class="answer-row" data-image="">
                     <span class="answer-number">2</span>
                     <textarea
-                      placeholder="Введите вариант ответа..."
+                      placeholder="Текст варианта (необязательно, если есть изображение)..."
                     ></textarea>
                     <div class="row-actions">
+                      <button
+                        class="answer-image-btn"
+                        onclick="addAnswerImage(this)"
+                        title="Добавить изображение"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <rect
+                            x="3"
+                            y="3"
+                            width="18"
+                            height="18"
+                            rx="2"
+                            ry="2"
+                          />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        onchange="handleAnswerImage(this)"
+                      />
+                      <img
+                        class="answer-image-preview"
+                        style="
+                          display: none;
+                          width: 32px;
+                          height: 32px;
+                          object-fit: cover;
+                          border-radius: 4px;
+                          cursor: pointer;
+                        "
+                        onclick="removeAnswerImagePreview(this)"
+                        title="Удалить изображение"
+                      />
                       <button
                         class="correct-checkbox"
                         onclick="toggleCorrect(this)"
@@ -1646,12 +1763,56 @@
                       </button>
                     </div>
                   </div>
-                  <div class="answer-row">
+                  <div class="answer-row" data-image="">
                     <span class="answer-number">3</span>
                     <textarea
-                      placeholder="Введите вариант ответа..."
+                      placeholder="Текст варианта (необязательно, если есть изображение)..."
                     ></textarea>
                     <div class="row-actions">
+                      <button
+                        class="answer-image-btn"
+                        onclick="addAnswerImage(this)"
+                        title="Добавить изображение"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <rect
+                            x="3"
+                            y="3"
+                            width="18"
+                            height="18"
+                            rx="2"
+                            ry="2"
+                          />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        onchange="handleAnswerImage(this)"
+                      />
+                      <img
+                        class="answer-image-preview"
+                        style="
+                          display: none;
+                          width: 32px;
+                          height: 32px;
+                          object-fit: cover;
+                          border-radius: 4px;
+                          cursor: pointer;
+                        "
+                        onclick="removeAnswerImagePreview(this)"
+                        title="Удалить изображение"
+                      />
                       <button
                         class="correct-checkbox"
                         onclick="toggleCorrect(this)"
@@ -1683,12 +1844,56 @@
                       </button>
                     </div>
                   </div>
-                  <div class="answer-row">
+                  <div class="answer-row" data-image="">
                     <span class="answer-number">4</span>
                     <textarea
-                      placeholder="Введите вариант ответа..."
+                      placeholder="Текст варианта (необязательно, если есть изображение)..."
                     ></textarea>
                     <div class="row-actions">
+                      <button
+                        class="answer-image-btn"
+                        onclick="addAnswerImage(this)"
+                        title="Добавить изображение"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <rect
+                            x="3"
+                            y="3"
+                            width="18"
+                            height="18"
+                            rx="2"
+                            ry="2"
+                          />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style="display: none"
+                        onchange="handleAnswerImage(this)"
+                      />
+                      <img
+                        class="answer-image-preview"
+                        style="
+                          display: none;
+                          width: 32px;
+                          height: 32px;
+                          object-fit: cover;
+                          border-radius: 4px;
+                          cursor: pointer;
+                        "
+                        onclick="removeAnswerImagePreview(this)"
+                        title="Удалить изображение"
+                      />
                       <button
                         class="correct-checkbox"
                         onclick="toggleCorrect(this)"
@@ -2373,10 +2578,29 @@
 
         const row = document.createElement("div");
         row.className = "answer-row";
+        row.dataset.image = "";
         row.innerHTML = `
           <span class="answer-number">${index + 1}</span>
-          <textarea placeholder="Введите вариант ответа..."></textarea>
+          <textarea placeholder="Текст варианта (необязательно, если есть изображение)..."></textarea>
           <div class="row-actions">
+            <button
+              class="answer-image-btn"
+              onclick="addAnswerImage(this)"
+              title="Добавить изображение"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </button>
+            <input
+              type="file"
+              accept="image/*"
+              style="display:none"
+              onchange="handleAnswerImage(this)"
+            />
+            <img class="answer-image-preview" style="display:none;width:32px;height:32px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="removeAnswerImagePreview(this)" title="Удалить изображение" />
             <button
               class="correct-checkbox"
               onclick="toggleCorrect(this)"
@@ -2396,6 +2620,47 @@
         `;
         container.insertBefore(row, addBtn);
         updateAnswerNumbers();
+      }
+
+      function addAnswerImage(btn) {
+        const input = btn.nextElementSibling;
+        input.click();
+      }
+
+      function handleAnswerImage(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const row = input.closest(".answer-row");
+          row.dataset.image = e.target.result;
+
+          // Показываем превью
+          const preview = row.querySelector(".answer-image-preview");
+          preview.src = e.target.result;
+          preview.style.display = "block";
+
+          // Скрываем кнопку добавления
+          const addBtn = row.querySelector(".answer-image-btn");
+          addBtn.style.display = "none";
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function removeAnswerImagePreview(img) {
+        const row = img.closest(".answer-row");
+        row.dataset.image = "";
+        img.style.display = "none";
+        img.src = "";
+
+        // Показываем кнопку добавления
+        const addBtn = row.querySelector(".answer-image-btn");
+        addBtn.style.display = "flex";
+
+        // Очищаем input
+        const input = row.querySelector('input[type="file"]');
+        input.value = "";
       }
 
       function removeAnswer(btn) {
@@ -2547,8 +2812,11 @@
         }
 
         const text = document.getElementById("question-text").value.trim();
-        if (!text) {
-          alert("Введите текст вопроса");
+        const questionImage = imageBase64;
+
+        // Текст вопроса необязателен, если есть картинка
+        if (!text && !questionImage) {
+          alert("Введите текст вопроса или добавьте изображение");
           return;
         }
 
@@ -2566,8 +2834,15 @@
           rows.forEach((row) => {
             const textarea = row.querySelector("textarea");
             const checkbox = row.querySelector(".correct-checkbox");
-            if (textarea.value.trim()) {
-              options.push(textarea.value.trim());
+            const image = row.dataset.image || "";
+            const optionText = textarea.value.trim();
+            // Вариант ответа необязателен, если есть картинка
+            if (optionText || image) {
+              const option = {
+                text: optionText || "",
+                image: image || null,
+              };
+              options.push(option);
               if (checkbox.classList.contains("checked")) {
                 correct.push(options.length - 1);
               }
@@ -2779,10 +3054,38 @@
               const row = document.createElement("div");
               row.className = "answer-row";
               const isChecked = q.correct.includes(i) ? "checked" : "";
+              // Поддержка как строк так и объектов {text, image}
+              const optText = typeof opt === "object" ? opt.text || opt : opt;
+              const optImage = typeof opt === "object" ? opt.image || "" : "";
+              row.dataset.image = optImage;
+
+              const imageBtnStyle = optImage ? "display:none" : "";
+              const imagePreviewStyle = optImage ? "" : "display:none";
+              const imagePreviewSrc = optImage ? `src="${optImage}"` : "";
+
               row.innerHTML = `
                 <span class="answer-number">${i + 1}</span>
-                <textarea placeholder="Введите вариант ответа...">${escapeHtml(opt)}</textarea>
+                <textarea placeholder="Текст варианта (необязательно, если есть изображение)...">${escapeHtml(optText)}</textarea>
                 <div class="row-actions">
+                  <button
+                    class="answer-image-btn"
+                    onclick="addAnswerImage(this)"
+                    title="Добавить изображение"
+                    style="${imageBtnStyle}"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                  </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style="display:none"
+                    onchange="handleAnswerImage(this)"
+                  />
+                  <img class="answer-image-preview" ${imagePreviewSrc} style="width:32px;height:32px;object-fit:cover;border-radius:4px;cursor:pointer;${imagePreviewStyle}" onclick="removeAnswerImagePreview(this)" title="Удалить изображение" />
                   <button
                     class="correct-checkbox ${isChecked}"
                     onclick="toggleCorrect(this)"
