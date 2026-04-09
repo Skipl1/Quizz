@@ -3046,6 +3046,10 @@
         socket.emit("get-quiz-questions", currentQuizId);
       });
 
+      socket.on("question-error", (data) => {
+        alert(data.error);
+      });
+
       socket.on("question-updated", () => {
         socket.emit("get-quiz-questions", currentQuizId);
       });

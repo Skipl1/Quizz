@@ -390,6 +390,16 @@ io.on("connection", (socket) => {
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz) return;
 
+    // Проверка: если работаем с БД, но у викторины нет dbId — ошибка
+    if (pool && !quiz.dbId) {
+      console.error("Ошибка: викторина создана в RAM режиме, но БД подключена");
+      socket.emit("question-error", {
+        error:
+          "Викторина не сохранена в БД. Пересоздайте её после подключения к БД.",
+      });
+      return;
+    }
+
     // Sanitize text and options
     const sanitizedText = sanitizeInput(data.text || "", 2000);
     const sanitizedOptions = Array.isArray(data.options)
@@ -433,6 +443,10 @@ io.on("connection", (socket) => {
         questionData.orderIndex = orderIndex;
       } catch (err) {
         console.error("Ошибка добавления вопроса:", err.message);
+        socket.emit("question-error", {
+          error: "Ошибка сохранения в БД: " + err.message,
+        });
+        return;
       }
     }
 
