@@ -9,7 +9,9 @@
     "customWittyPhrases": [
       "Архитектура — это искусство того, что нельзя забыть",
       "Квиз сам себя не адаптирует, но мы поможем",
-      "Подключение к ИИ-оркестратору..."
+      "Подключение к ИИ-оркестратору...",
+      "Миграция на Next.js — шаг за шагом, без боли",
+      "Render + PostgreSQL = стабильный продакшен"
     ]
   },
   "tools": {
@@ -21,15 +23,33 @@
     "name": "coder-model",
     "maxSessionTurns": 1000,
     "enableOpenAILogging": false
-    },
+  },
   "context": {
-    "fileName": [ "QWEN.md",".qwen/agents/*.md" ],
-    "includeDirectories": [
-      "public"
-    ],
+    "fileName": ["QWEN.md", ".qwen/agents/*.md", ".qwen/skills/*.md", ".qwen/MIGRATION-ORCHESTRATOR.md", ".qwen/QUICK-START.md"],
+    "includeDirectories": ["public", "app", "components", "lib", "styles"],
     "loadFromIncludeDirectories": true,
     "fileFiltering": {
-      "respectGitIgnore": true
+      "respectGitIgnore": true,
+      "respectQwenIgnore": true
+    }
+  },
+  "agents": {
+    "orchestration": {
+      "order": ["backend-engineer", "frontend-architect", "qa-devops"],
+      "collaboration": "sequential-with-feedback",
+      "description": "Агенты работают последовательно: BE → FE → QA. Каждый агент может запросить уточнение у предыдущего."
+    },
+    "backend-engineer": {
+      "priority": ["db-connection", "api-routes", "socket-refactor", "security"],
+      "alwaysCheckRenderDB": true
+    },
+    "frontend-architect": {
+      "priority": ["react-components", "tailwind-migration", "mobile-first", "socket-hooks"],
+      "alwaysUseTailwind": true
+    },
+    "qa-devops": {
+      "priority": ["e2e-tests", "db-validation", "render-deploy-check", "security-audit"],
+      "alwaysTestOnMobile": true
     }
   },
   "advanced": {

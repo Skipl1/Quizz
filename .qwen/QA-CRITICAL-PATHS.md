@@ -1,9 +1,26 @@
 # QA Critical Paths Checklist — QUIZZ
 
-> **Date:** 2026-04-07
+> **Date:** 2026-04-09
 > **Reviewer:** qa-devops agent
 > **Scope:** Code review of server.js, public/index.html, public/admin.html
-> **Status:** 🟢 Phase 2 P0 Issues Resolved — See Updates Below
+> **Status:** 🟢 Phase 0 Migration Complete — Zod Validation Integrated
+> **Migration:** Next.js + React — Фаза 0 ✅ завершена 2026-04-09
+
+---
+
+## 📢 Migration Status
+
+Проект мигрирует на **Next.js App Router + React + Tailwind CSS**.
+Все новые компоненты проходят QA через Playwright E2E тесты (iPhone 14 + Desktop).
+Legacy HTML (`public/`) сохраняется до Фазы 7 как fallback.
+
+### ✅ Фаза 0: Подготовка (Завершена 2026-04-09)
+- Zod установлен, все Socket.IO обработчики валидируются через Zod-схемы
+- XSS-защита через `.refine()` + `sanitizeInput` во всех схемах
+- Render PostgreSQL подключён (4 викторины, 18 вопросов)
+- `server.js` не изменён (точка входа для Render)
+- Legacy HTML в `public/` сохранён
+- Готово для Фазы 1 (Frontend-Architect)
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/admin/page": "/admin",
+  "/api/questions/[id]/route": "/api/questions/[id]",
+  "/api/questions/route": "/api/questions",
+  "/api/quizzes/[id]/route": "/api/quizzes/[id]",
+  "/api/quizzes/route": "/api/quizzes",
+  "/page": "/"
+}

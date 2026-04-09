@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,5657,o=>{"use strict";var r=o.i(43476),t=o.i(9860);o.s(["RootProvider",0,function({children:o}){return(0,r.jsx)(t.SocketProvider,{children:o})}])}]);
