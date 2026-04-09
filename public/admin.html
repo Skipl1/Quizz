@@ -1312,7 +1312,13 @@
             Викторины
           </button>
           <button class="tab" onclick="showTab('play')">Играть</button>
-          <button class="tab" onclick="showTab('leaderboard')">Рейтинг</button>
+          <button
+            class="tab hidden"
+            id="leaderboard-tab-btn"
+            onclick="showTab('leaderboard')"
+          >
+            Рейтинг
+          </button>
         </div>
 
         <!-- Викторины -->
@@ -2135,13 +2141,13 @@
                 Запустить викторину
               </button>
               <button
-                class="btn btn-full"
+                class="btn btn-full btn-danger"
                 id="stop-btn"
                 onclick="stopQuiz()"
                 style="margin-top: 0.75rem"
                 disabled
               >
-                Перезапустить
+                Остановить викторину
               </button>
 
               <div class="status" id="game-status">Ожидание запуска...</div>
@@ -2150,9 +2156,25 @@
         </div>
 
         <!-- Рейтинг -->
-        <div id="leaderboard-tab" class="screen">
+        <div id="leaderboard-tab" class="screen hidden">
           <div class="card">
             <h2>Рейтинг игроков</h2>
+            <div
+              style="
+                display: flex;
+                gap: 0.75rem;
+                margin-bottom: 1.25rem;
+                flex-wrap: wrap;
+              "
+            >
+              <button
+                class="btn btn-success"
+                onclick="downloadResults()"
+                style="flex: 1; min-width: 200px"
+              >
+                Выгрузить результаты (CSV)
+              </button>
+            </div>
             <div class="players-count" id="players-count">Игроков: 0</div>
             <div id="leaderboard">
               <div class="empty-state">Пока нет игроков</div>
@@ -2188,6 +2210,8 @@
                   .getElementById("main-screen")
                   .classList.remove("hidden");
                 socket.emit("get-quizzes");
+                // Запрашиваем текущее состояние игры
+                socket.emit("get-game-state");
               } else {
                 localStorage.removeItem(ADMIN_SESSION_KEY);
               }
@@ -2212,6 +2236,8 @@
             document.getElementById("login-screen").classList.add("hidden");
             document.getElementById("main-screen").classList.remove("hidden");
             socket.emit("get-quizzes");
+            // Запрашиваем текущее состояние игры
+            socket.emit("get-game-state");
           } else {
             document.getElementById("login-error").textContent = response.error;
             document.getElementById("login-error").style.display = "block";
@@ -2902,9 +2928,9 @@
             <div class="q-content">
               <div class="q-text">${escapeHtml(q.text)}</div>
               <div class="q-meta">
-                <span>${q.type === 'open_ended' ? 'Развёрнутый ответ' : q.type === 'fill_blank' ? 'Заполнить пробел' : q.type === 'true_false' ? 'Правда/Ложь' : q.type === 'ordering' ? 'Порядок' : q.type === 'matching' ? 'Соответствие' : 'Множественный выбор'}</span>
+                <span>${q.type === "open_ended" ? "Развёрнутый ответ" : q.type === "fill_blank" ? "Заполнить пробел" : q.type === "true_false" ? "Правда/Ложь" : q.type === "ordering" ? "Порядок" : q.type === "matching" ? "Соответствие" : "Множественный выбор"}</span>
                 <span>${q.timeLimit || 30} сек</span>
-                ${q.type === 'multiple_choice' ? `<span>${q.answerType === "multiple" ? "Несколько ответов" : q.answerType === "any" ? "Один или несколько" : "Один ответ"}</span>` : ''}
+                ${q.type === "multiple_choice" ? `<span>${q.answerType === "multiple" ? "Несколько ответов" : q.answerType === "any" ? "Один или несколько" : "Один ответ"}</span>` : ""}
               </div>
             </div>
             <div class="q-actions">
@@ -3013,24 +3039,85 @@
       }
 
       function stopQuiz() {
-        socket.emit("restart-quiz");
+        socket.emit("stop-quiz");
       }
 
-      socket.on("quiz-restarted", (data) => {
+      socket.on("quiz-stopped", () => {
+        // Сбрасываем состояние игры
+        currentQuizId = null;
+
+        // Показываем список викторин
+        document.getElementById("game-not-started").classList.remove("hidden");
+        document.getElementById("game-active").classList.add("hidden");
         document.getElementById("game-status").textContent =
-          'Викторина перезапущена! Нажмите "Запустить" для начала.';
+          "Ожидание запуска...";
         document.getElementById("start-btn").disabled = false;
         document.getElementById("stop-btn").disabled = true;
         document
           .getElementById("game-info-card")
           .classList.remove("quiz-running");
+
+        // Скрываем вкладку рейтинга
+        document.getElementById("leaderboard-tab-btn").classList.add("hidden");
+        document.getElementById("leaderboard-tab").classList.add("hidden");
+
+        // Переключаемся на вкладку "Викторины"
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.remove("active"));
+        document
+          .querySelector(".tab[onclick=\"showTab('quizzes')\"]")
+          .classList.add("active");
+        document
+          .querySelectorAll(".screen")
+          .forEach((s) => s.classList.remove("active"));
+        document.getElementById("quizzes-tab").classList.add("active");
+      });
+
+      // Восстановление состояния игры после перезагрузки страницы
+      socket.on("game-state", (data) => {
+        if (data.currentQuizId) {
+          currentQuizId = data.currentQuizId;
+          document.getElementById("game-not-started").classList.add("hidden");
+          document.getElementById("game-active").classList.remove("hidden");
+          document.getElementById("current-quiz-name").textContent =
+            `${data.quizName || "Викторина"} (${data.questionsCount} вопросов)`;
+
+          if (data.quizStarted) {
+            // Викторина запущена
+            document.getElementById("start-btn").disabled = true;
+            document.getElementById("stop-btn").disabled = false;
+            document.getElementById("game-status").textContent =
+              "Викторина идёт...";
+            document
+              .getElementById("game-info-card")
+              .classList.add("quiz-running");
+          } else {
+            // Викторина выбрана, но не запущена
+            document.getElementById("start-btn").disabled = false;
+            document.getElementById("stop-btn").disabled = true;
+            document.getElementById("game-status").textContent =
+              "Ожидание запуска...";
+            document
+              .getElementById("game-info-card")
+              .classList.remove("quiz-running");
+          }
+
+          // Если викторина завершена - показываем вкладку "Рейтинг"
+          if (data.quizFinished) {
+            document
+              .getElementById("leaderboard-tab-btn")
+              .classList.remove("hidden");
+            document
+              .getElementById("leaderboard-tab")
+              .classList.remove("hidden");
+          }
+        }
       });
 
       socket.on("update-leaderboard", (leaderboard) => {
         document.getElementById("players-count").textContent =
           `Игроков: ${leaderboard.length}`;
-        document.getElementById("players-online").textContent =
-          leaderboard.length;
 
         const container = document.getElementById("leaderboard");
         if (leaderboard.length === 0) {
@@ -3042,9 +3129,9 @@
         container.innerHTML = leaderboard
           .map(
             (p, i) => `
-          <div class="leaderboard-item" style="${p.disconnected ? 'opacity: 0.6;' : ''}">
+          <div class="leaderboard-item">
             <span class="rank">#${i + 1}</span>
-            <span class="name">${escapeHtml(p.name)}${p.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;font-weight:600;">(отключился)</span>' : ''}</span>
+            <span class="name">${escapeHtml(p.name)}</span>
             <span class="score">${p.score} бал.</span>
             <span style="color:var(--text-muted);font-size:0.8rem;margin-left:0.75rem;">${p.percentage}%</span>
           </div>
@@ -3054,20 +3141,33 @@
       });
 
       socket.on("all-players-finished", (data) => {
+        // Показываем вкладку "Рейтинг"
+        document
+          .getElementById("leaderboard-tab-btn")
+          .classList.remove("hidden");
+        document.getElementById("leaderboard-tab").classList.remove("hidden");
+
+        // Переключаемся на вкладку рейтинга
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.remove("active"));
+        document.getElementById("leaderboard-tab-btn").classList.add("active");
+        document
+          .querySelectorAll(".screen")
+          .forEach((s) => s.classList.remove("active"));
+        document.getElementById("leaderboard-tab").classList.add("active");
+
         const container = document.getElementById("leaderboard");
         container.innerHTML = `
           <div style="background:rgba(16,185,129,0.15);color:var(--success);padding:1.25rem;border-radius:12px;margin-bottom:1rem;">
             <strong>Все игроки завершили викторину!</strong>
           </div>
-          <button class="btn btn-success btn-full" onclick="downloadResults()" style="margin-bottom:1rem;">
-            Сохранить результаты (CSV)
-          </button>
           ${data.leaderboard
             .map(
               (p, i) => `
-            <div class="leaderboard-item" style="${p.disconnected ? 'opacity: 0.6;' : ''}">
+            <div class="leaderboard-item">
               <span class="rank">#${i + 1}</span>
-              <span class="name">${escapeHtml(p.name)}${p.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;font-weight:600;">(отключился)</span>' : ''}</span>
+              <span class="name">${escapeHtml(p.name)}</span>
               <div style="display:flex;gap:0.75rem;align-items:center;">
                 <span class="score">${p.score} бал.</span>
                 <span style="background:var(--accent);color:white;padding:0.25rem 0.75rem;border-radius:8px;font-size:0.8rem;">${p.percentage}%</span>
@@ -3080,9 +3180,15 @@
       });
 
       socket.on("players-count", (data) => {
-        document.getElementById("players-online").textContent = data.count;
-        document.getElementById("players-count").textContent =
-          `Игроков: ${data.count}`;
+        const playersOnlineEl = document.getElementById("players-online");
+        if (playersOnlineEl) {
+          playersOnlineEl.textContent = data.count;
+        }
+        const playersCountEl = document.getElementById("players-count");
+        if (playersCountEl) {
+          playersCountEl.textContent = `Игроков: ${data.count}`;
+        }
+        console.log(`Игроков онлайн: ${data.count}`);
       });
 
       function escapeHtml(text) {
@@ -3104,10 +3210,9 @@
           .slice(0, 19)
           .replace(/:/g, "-");
 
-        let csv = "Место,Игрок,Баллы,Процент,Вопросов решено,Статус\n";
+        let csv = "Место,Игрок,Баллы,Процент,Вопросов решено\n";
         leaderboard.forEach((p, i) => {
-          const status = p.disconnected ? "Отключился" : "Завершил";
-          csv += `${i + 1},"${p.name}",${p.score},${p.percentage}%,${p.answered},${status}\n`;
+          csv += `${i + 1},"${p.name}",${p.score},${p.percentage}%,${p.answered}\n`;
         });
 
         const blob = new Blob(["\ufeff" + csv], {

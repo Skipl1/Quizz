@@ -1026,11 +1026,27 @@
               name: data.name,
               savedId: data.playerId,
             });
+            // Скрываем экран входа сразу, чтобы не мигал
+            showScreen("waiting-screen");
           } catch (e) {
             sessionStorage.removeItem(STORAGE_KEY);
           }
         }
       }
+
+      // Восстановление сессии при переподключении сокета
+      let sessionRestored = false;
+      socket.on("connect", () => {
+        if (!sessionRestored) {
+          checkSavedSession();
+          sessionRestored = true;
+        }
+      });
+
+      socket.on("reconnect", () => {
+        // При переподключении тоже пробуем восстановить
+        checkSavedSession();
+      });
 
       socket.on("registered", (data) => {
         playerName = data.name;
@@ -1051,9 +1067,12 @@
       });
 
       socket.on("quiz-already-started", () => {
-        alert("Викторина уже запущена! Подключиться нельзя.");
-        sessionStorage.removeItem(STORAGE_KEY);
-        location.reload();
+        // Если сессия есть, она уже восстанавливается через checkSavedSession()
+        // Просто показываем сообщение для новых игроков
+        const saved = sessionStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+          alert("Викторина уже запущена! Подключиться нельзя.");
+        }
       });
 
       socket.on("quiz-ready", (data) => {
@@ -1183,7 +1202,23 @@
 
       function submitMultipleChoiceFinal() {
         if (selectedMCIndex === null) {
-          alert("Выберите вариант ответа!");
+          // Показываем неблокирующее уведомление вместо alert
+          const hintEl = document.getElementById("answer-hint");
+          hintEl.textContent = "Выберите вариант ответа!";
+          hintEl.style.color = "var(--danger)";
+          setTimeout(() => {
+            hintEl.style.color = "";
+            // Восстанавливаем подсказку
+            const typeNames = {
+              multiple_choice: "Выберите один или несколько вариантов",
+              true_false: "Выберите вариант",
+              fill_blank: "Введите ответ",
+              open_ended: "Введите развёрнутый ответ",
+              ordering: "Расположите элементы в правильном порядке",
+              matching: "Соотнесите пары",
+            };
+            hintEl.textContent = typeNames[currentQuestionType] || "";
+          }, 2000);
           return;
         }
         if (hasAnswered) return;
@@ -1348,7 +1383,7 @@
         matchingDragged = null;
         matchingDraggedFromDropzone = null;
         // Убираем подсветку со всех dropzone
-        document.querySelectorAll(".matching-dropzone").forEach(dz => {
+        document.querySelectorAll(".matching-dropzone").forEach((dz) => {
           dz.classList.remove("drag-over");
         });
       }
@@ -1377,7 +1412,7 @@
           // Находим элемент, который сейчас в этой dropzone (визуально он в right колонке)
           // И освобождаем его
           const existingPairIndex = matchingUserPairs.findIndex(
-            p => p.answerIndex === correctIndex
+            (p) => p.answerIndex === correctIndex,
           );
           if (existingPairIndex !== -1) {
             matchingUserPairs.splice(existingPairIndex, 1);
@@ -1387,14 +1422,14 @@
         // Если перетаскиваемый элемент уже был в другой dropzone, убираем его оттуда
         if (matchingDraggedFromDropzone) {
           const oldPairIndex = matchingUserPairs.findIndex(
-            p => p.questionIndex === draggedIndex
+            (p) => p.questionIndex === draggedIndex,
           );
           if (oldPairIndex !== -1) {
             matchingUserPairs.splice(oldPairIndex, 1);
           }
           // Освобождаем старую dropzone
           const oldDropzone = document.querySelector(
-            `.matching-dropzone[data-correct-index="${matchingDraggedFromDropzone}"]`
+            `.matching-dropzone[data-correct-index="${matchingDraggedFromDropzone}"]`,
           );
           if (oldDropzone) {
             oldDropzone.classList.remove("has-item", "matched");
@@ -1446,13 +1481,13 @@
         // Если элемент был размещён в dropzone, освобождаем её
         if (matchingDraggedFromDropzone) {
           const pairIndex = matchingUserPairs.findIndex(
-            p => p.questionIndex === draggedIndex
+            (p) => p.questionIndex === draggedIndex,
           );
           if (pairIndex !== -1) {
             matchingUserPairs.splice(pairIndex, 1);
           }
           const dropzone = document.querySelector(
-            `.matching-dropzone[data-correct-index="${matchingDraggedFromDropzone}"]`
+            `.matching-dropzone[data-correct-index="${matchingDraggedFromDropzone}"]`,
           );
           if (dropzone) {
             dropzone.classList.remove("has-item", "matched");
@@ -1477,7 +1512,14 @@
 
         // Проверяем, все ли пары собраны
         if (matchingUserPairs.length < matchingTotal) {
-          alert("Соедините все пары! (" + matchingUserPairs.length + "/" + matchingTotal + ")");
+          // Показываем неблокирующее уведомление вместо alert
+          const hintEl = document.getElementById("answer-hint");
+          hintEl.textContent = `Соедините все пары! (${matchingUserPairs.length}/${matchingTotal})`;
+          hintEl.style.color = "var(--danger)";
+          setTimeout(() => {
+            hintEl.style.color = "";
+            hintEl.textContent = "Соотнесите пары";
+          }, 2000);
           return;
         }
 
@@ -1626,7 +1668,14 @@
 
       function submitTFFinal() {
         if (selectedTFIndex === null) {
-          alert("Выберите вариант ответа!");
+          // Показываем неблокирующее уведомление вместо alert
+          const hintEl = document.getElementById("answer-hint");
+          hintEl.textContent = "Выберите вариант ответа!";
+          hintEl.style.color = "var(--danger)";
+          setTimeout(() => {
+            hintEl.style.color = "";
+            hintEl.textContent = "Выберите вариант";
+          }, 2000);
           return;
         }
         if (hasAnswered) return;
@@ -1644,7 +1693,17 @@
         const input = document.getElementById("text-answer-input");
         const answer = input.value.trim();
         if (!answer) {
-          alert("Введите ответ!");
+          // Показываем неблокирующее уведомление вместо alert
+          const hintEl = document.getElementById("answer-hint");
+          hintEl.textContent = "Введите ответ!";
+          hintEl.style.color = "var(--danger)";
+          setTimeout(() => {
+            hintEl.style.color = "";
+            hintEl.textContent =
+              currentQuestionType === "fill_blank"
+                ? "Введите ответ"
+                : "Введите развёрнутый ответ";
+          }, 2000);
           return;
         }
         hasAnswered = true;
@@ -1664,6 +1723,7 @@
       socket.on("player-quiz-ended", (data) => {
         if (timerInterval) clearInterval(timerInterval);
         document.getElementById("final-score").textContent = `${data.score}`;
+        showScreen("end-screen");
         socket.emit("get-final-leaderboard");
       });
 
@@ -1697,9 +1757,9 @@
               ${leaderboard
                 .map(
                   (player, i) => `
-                <tr class="${player.name === playerName ? "player-row" : ""}" style="${player.disconnected ? 'opacity: 0.5;' : ''}">
+                <tr class="${player.name === playerName ? "player-row" : ""}" style="${player.disconnected ? "opacity: 0.5;" : ""}">
                   <td class="rank">${i + 1}</td>
-                  <td>${escapeHtml(player.name)}${player.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;">(откл.)</span>' : ''}</td>
+                  <td>${escapeHtml(player.name)}${player.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;">(откл.)</span>' : ""}</td>
                   <td class="score">${player.score}</td>
                 </tr>
               `,
@@ -1716,7 +1776,7 @@
         if (timerInterval) clearInterval(timerInterval);
         document.getElementById("time-up").style.display = "none";
         document.getElementById("waiting-text").textContent =
-          "Викторина остановлена ведущим. Ожидание...";
+          "Викторина завершена. Спасибо за игру!";
         showScreen("waiting-screen");
       });
 
@@ -1733,8 +1793,6 @@
         div.textContent = text;
         return div.innerHTML;
       }
-
-      checkSavedSession();
     </script>
   </body>
 </html>
