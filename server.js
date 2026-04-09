@@ -639,6 +639,8 @@ io.on("connection", (socket) => {
       const player = players[savedId];
       // Перепривязываем к новому сокету
       players[socket.id] = player;
+      // Сбрасываем статус отключения
+      player.disconnected = false;
       delete players[savedId];
 
       console.log(
@@ -679,6 +681,8 @@ io.on("connection", (socket) => {
       const [oldId, player] = existingPlayer;
       // Перепривязываем к новому сокету
       players[socket.id] = player;
+      // Сбрасываем статус отключения
+      player.disconnected = false;
       delete players[oldId];
 
       console.log(
@@ -823,7 +827,9 @@ io.on("connection", (socket) => {
     const player = players[socket.id];
     if (player) {
       console.log(`Игрок отключился: ${player.name}`);
-      delete players[socket.id];
+      // Помечаем как отключённого, но НЕ удаляем — чтобы сохранить в рейтинге
+      player.disconnected = true;
+      player.lastSocketId = socket.id;
       broadcastLeaderboard();
     }
     if (adminSessions[socket.id]) {
@@ -903,6 +909,7 @@ function getLeaderboard() {
                 100,
             )
           : 0,
+      disconnected: data.disconnected || false,
     }))
     .sort((a, b) => b.score - a.score);
 }
@@ -913,7 +920,7 @@ function checkAllPlayersFinished(quiz) {
   if (activePlayers.length === 0) return;
 
   const allFinished = activePlayers.every(
-    (p) => p.answeredQuestions.length >= quiz.questions.length,
+    (p) => p.disconnected || p.answeredQuestions.length >= quiz.questions.length,
   );
 
   if (allFinished) {
@@ -931,8 +938,9 @@ function checkAllPlayersFinished(quiz) {
 function broadcastLeaderboard() {
   const leaderboard = getLeaderboard();
   io.emit("update-leaderboard", leaderboard);
-  // Также отправляем количество игроков
-  io.emit("players-count", { count: Object.keys(players).length });
+  // Считаем только онлайн игроков (не отключившихся)
+  const onlineCount = Object.values(players).filter(p => !p.disconnected).length;
+  io.emit("players-count", { count: onlineCount });
 }
 
 // Инициализация и запуск

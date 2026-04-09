@@ -3042,9 +3042,9 @@
         container.innerHTML = leaderboard
           .map(
             (p, i) => `
-          <div class="leaderboard-item">
+          <div class="leaderboard-item" style="${p.disconnected ? 'opacity: 0.6;' : ''}">
             <span class="rank">#${i + 1}</span>
-            <span class="name">${escapeHtml(p.name)}</span>
+            <span class="name">${escapeHtml(p.name)}${p.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;font-weight:600;">(отключился)</span>' : ''}</span>
             <span class="score">${p.score} бал.</span>
             <span style="color:var(--text-muted);font-size:0.8rem;margin-left:0.75rem;">${p.percentage}%</span>
           </div>
@@ -3065,9 +3065,9 @@
           ${data.leaderboard
             .map(
               (p, i) => `
-            <div class="leaderboard-item">
+            <div class="leaderboard-item" style="${p.disconnected ? 'opacity: 0.6;' : ''}">
               <span class="rank">#${i + 1}</span>
-              <span class="name">${escapeHtml(p.name)}</span>
+              <span class="name">${escapeHtml(p.name)}${p.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;font-weight:600;">(отключился)</span>' : ''}</span>
               <div style="display:flex;gap:0.75rem;align-items:center;">
                 <span class="score">${p.score} бал.</span>
                 <span style="background:var(--accent);color:white;padding:0.25rem 0.75rem;border-radius:8px;font-size:0.8rem;">${p.percentage}%</span>
@@ -3104,9 +3104,10 @@
           .slice(0, 19)
           .replace(/:/g, "-");
 
-        let csv = "Место,Игрок,Баллы,Процент,Вопросов решено\n";
+        let csv = "Место,Игрок,Баллы,Процент,Вопросов решено,Статус\n";
         leaderboard.forEach((p, i) => {
-          csv += `${i + 1},"${p.name}",${p.score},${p.percentage}%,${p.answered}\n`;
+          const status = p.disconnected ? "Отключился" : "Завершил";
+          csv += `${i + 1},"${p.name}",${p.score},${p.percentage}%,${p.answered},${status}\n`;
         });
 
         const blob = new Blob(["\ufeff" + csv], {

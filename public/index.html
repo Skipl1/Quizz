@@ -526,6 +526,12 @@
         gap: 0.75rem;
       }
 
+      .matching-column.drag-over {
+        background: rgba(139, 92, 246, 0.1);
+        border-radius: 12px;
+        padding: 0.5rem;
+      }
+
       .matching-item {
         background: rgba(15, 23, 42, 0.5);
         border: 2px solid rgba(255, 255, 255, 0.05);
@@ -551,7 +557,12 @@
       .matching-item.matched {
         background: rgba(139, 92, 246, 0.15);
         border-color: var(--accent);
-        cursor: default;
+        cursor: grab;
+      }
+
+      .matching-item.matched:hover {
+        background: rgba(139, 92, 246, 0.25);
+        border-color: var(--accent-hover);
       }
 
       .matching-item.dragging {
@@ -983,6 +994,7 @@
 
       // Matching state
       let matchingDragged = null;
+      let matchingDraggedFromDropzone = null;
       let matchingMatches = 0;
       let matchingTotal = 0;
       let matchingUserPairs = [];
@@ -1058,6 +1070,8 @@
         // Сброс переменных выбора
         selectedMCIndex = null;
         selectedTFIndex = null;
+        matchingDragged = null;
+        matchingDraggedFromDropzone = null;
         matchingUserPairs = [];
         matchingMatches = 0;
 
@@ -1287,8 +1301,8 @@
           item.draggable = true;
           item.textContent = pair.left;
           item.dataset.index = options.indexOf(pair);
-          item.addEventListener("dragstart", handleMatchingDragStart);
-          item.addEventListener("dragend", handleMatchingDragEnd);
+          item.ondragstart = handleMatchingDragStart;
+          item.ondragend = handleMatchingDragEnd;
           leftCol.appendChild(item);
         });
 
@@ -1301,12 +1315,17 @@
           dropzone.dataset.answer = pair.right;
           dropzone.dataset.correctIndex = options.indexOf(pair);
 
-          dropzone.addEventListener("dragover", handleMatchingDragOver);
-          dropzone.addEventListener("dragleave", handleMatchingDragLeave);
-          dropzone.addEventListener("drop", handleMatchingDrop);
+          dropzone.ondragover = handleMatchingDragOver;
+          dropzone.ondragleave = handleMatchingDragLeave;
+          dropzone.ondrop = handleMatchingDrop;
 
           rightCol.appendChild(dropzone);
         });
+
+        // Добавляем dropzone в левую колонку (чтобы можно было вернуть элемент)
+        leftCol.ondragover = handleMatchingLeftDragOver;
+        leftCol.ondragleave = handleMatchingLeftDragLeave;
+        leftCol.ondrop = handleMatchingLeftDrop;
 
         document.getElementById("matching-container").style.display = "grid";
         const submitBtn = document.getElementById("submit-matching-btn");
@@ -1318,10 +1337,20 @@
         matchingDragged = this;
         this.classList.add("dragging");
         e.dataTransfer.effectAllowed = "move";
+        // Если элемент был размещён, запоминаем откуда взяли
+        if (this.dataset.placedInDropzone) {
+          matchingDraggedFromDropzone = this.dataset.placedInDropzone;
+        }
       }
 
       function handleMatchingDragEnd() {
         this.classList.remove("dragging");
+        matchingDragged = null;
+        matchingDraggedFromDropzone = null;
+        // Убираем подсветку со всех dropzone
+        document.querySelectorAll(".matching-dropzone").forEach(dz => {
+          dz.classList.remove("drag-over");
+        });
       }
 
       function handleMatchingDragOver(e) {
@@ -1338,26 +1367,107 @@
         e.stopPropagation();
         this.classList.remove("drag-over");
 
-        if (matchingDragged && !this.classList.contains("has-item")) {
-          // Запоминаем выбор пользователя
-          const draggedIndex = parseInt(matchingDragged.dataset.index);
-          const correctIndex = parseInt(this.dataset.correctIndex);
+        if (!matchingDragged) return false;
 
-          matchingUserPairs.push({
-            questionIndex: draggedIndex,
-            answerIndex: correctIndex,
-          });
+        const draggedIndex = parseInt(matchingDragged.dataset.index);
+        const correctIndex = parseInt(this.dataset.correctIndex);
 
-          // Визуально соединяем
-          this.classList.add("has-item");
-          matchingDragged.classList.add("matched");
-          matchingDragged.draggable = false;
-          matchingDragged.style.opacity = "0.5";
-
-          matchingMatches++;
-
-          matchingDragged = null;
+        // Если эта dropzone уже занята другим элементом
+        if (this.classList.contains("has-item")) {
+          // Находим элемент, который сейчас в этой dropzone (визуально он в right колонке)
+          // И освобождаем его
+          const existingPairIndex = matchingUserPairs.findIndex(
+            p => p.answerIndex === correctIndex
+          );
+          if (existingPairIndex !== -1) {
+            matchingUserPairs.splice(existingPairIndex, 1);
+          }
         }
+
+        // Если перетаскиваемый элемент уже был в другой dropzone, убираем его оттуда
+        if (matchingDraggedFromDropzone) {
+          const oldPairIndex = matchingUserPairs.findIndex(
+            p => p.questionIndex === draggedIndex
+          );
+          if (oldPairIndex !== -1) {
+            matchingUserPairs.splice(oldPairIndex, 1);
+          }
+          // Освобождаем старую dropzone
+          const oldDropzone = document.querySelector(
+            `.matching-dropzone[data-correct-index="${matchingDraggedFromDropzone}"]`
+          );
+          if (oldDropzone) {
+            oldDropzone.classList.remove("has-item", "matched");
+            oldDropzone.textContent = oldDropzone.dataset.answer;
+          }
+        }
+
+        // Запоминаем новый выбор
+        matchingUserPairs.push({
+          questionIndex: draggedIndex,
+          answerIndex: correctIndex,
+        });
+
+        // Визуально размещаем элемент в dropzone
+        this.classList.add("has-item", "matched");
+        this.textContent = matchingDragged.textContent;
+        this.dataset.placedItemIndex = draggedIndex;
+
+        // Помечаем элемент как размещённый
+        matchingDragged.classList.add("matched");
+        matchingDragged.dataset.placedInDropzone = correctIndex;
+        matchingDragged.draggable = true; // Оставляем возможность перетаскивать заново
+        matchingDragged.style.opacity = "0.5";
+
+        matchingDragged = null;
+        matchingDraggedFromDropzone = null;
+
+        return false;
+      }
+
+      // Обработчики для возврата элемента в левую колонку
+      function handleMatchingLeftDragOver(e) {
+        e.preventDefault();
+        this.classList.add("drag-over");
+        return false;
+      }
+
+      function handleMatchingLeftDragLeave() {
+        this.classList.remove("drag-over");
+      }
+
+      function handleMatchingLeftDrop(e) {
+        e.stopPropagation();
+
+        if (!matchingDragged) return false;
+
+        const draggedIndex = parseInt(matchingDragged.dataset.index);
+
+        // Если элемент был размещён в dropzone, освобождаем её
+        if (matchingDraggedFromDropzone) {
+          const pairIndex = matchingUserPairs.findIndex(
+            p => p.questionIndex === draggedIndex
+          );
+          if (pairIndex !== -1) {
+            matchingUserPairs.splice(pairIndex, 1);
+          }
+          const dropzone = document.querySelector(
+            `.matching-dropzone[data-correct-index="${matchingDraggedFromDropzone}"]`
+          );
+          if (dropzone) {
+            dropzone.classList.remove("has-item", "matched");
+            dropzone.textContent = dropzone.dataset.answer;
+          }
+        }
+
+        // Возвращаем элемент в исходное состояние
+        matchingDragged.classList.remove("matched");
+        matchingDragged.style.opacity = "1";
+        matchingDragged.draggable = true;
+        delete matchingDragged.dataset.placedInDropzone;
+
+        matchingDragged = null;
+        matchingDraggedFromDropzone = null;
 
         return false;
       }
@@ -1366,8 +1476,8 @@
         if (hasAnswered) return;
 
         // Проверяем, все ли пары собраны
-        if (matchingMatches < matchingTotal) {
-          alert("Соедините все пары!");
+        if (matchingUserPairs.length < matchingTotal) {
+          alert("Соедините все пары! (" + matchingUserPairs.length + "/" + matchingTotal + ")");
           return;
         }
 
@@ -1448,7 +1558,7 @@
           const userOrder = items.map((item) => parseInt(item.dataset.index));
           socket.emit("submit-answer", { type: "ordering", answer: userOrder });
         } else if (currentQuestionType === "matching") {
-          if (matchingMatches >= matchingTotal) {
+          if (matchingUserPairs.length >= matchingTotal) {
             const allCorrect = matchingUserPairs.every(
               (p) => p.questionIndex === p.answerIndex,
             );
@@ -1587,9 +1697,9 @@
               ${leaderboard
                 .map(
                   (player, i) => `
-                <tr class="${player.name === playerName ? "player-row" : ""}">
+                <tr class="${player.name === playerName ? "player-row" : ""}" style="${player.disconnected ? 'opacity: 0.5;' : ''}">
                   <td class="rank">${i + 1}</td>
-                  <td>${escapeHtml(player.name)}</td>
+                  <td>${escapeHtml(player.name)}${player.disconnected ? ' <span style="color:var(--danger);font-size:0.75rem;">(откл.)</span>' : ''}</td>
                   <td class="score">${player.score}</td>
                 </tr>
               `,
