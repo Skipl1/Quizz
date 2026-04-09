@@ -2925,6 +2925,8 @@
             image: imageBase64,
             timeLimit: selectedTime,
           });
+          // Сбрасываем индекс редактирования сразу
+          window.editQuestionIndex = undefined;
         } else {
           socket.emit("add-question", {
             quizId: currentQuizId,
@@ -2959,6 +2961,21 @@
           .forEach((row, i) => {
             row.querySelector("textarea").value = "";
             row.querySelector(".correct-checkbox").classList.remove("checked");
+            // Очищаем картинки вариантов
+            row.dataset.image = "";
+            const preview = row.querySelector(".answer-image-preview");
+            if (preview) {
+              preview.style.display = "none";
+              preview.src = "";
+            }
+            const addImgBtn = row.querySelector(".answer-image-btn");
+            if (addImgBtn) {
+              addImgBtn.style.display = "flex";
+            }
+            const fileInput = row.querySelector('input[type="file"]');
+            if (fileInput) {
+              fileInput.value = "";
+            }
           });
 
         // Очистка ordering
