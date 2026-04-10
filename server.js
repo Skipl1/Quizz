@@ -10,9 +10,14 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // === RATE LIMITING ===
+
+// HTTP rate limiting
+const HTTP_RATE_WINDOW_MS = Number(process.env.HTTP_RATE_WINDOW_MS) || 15 * 60 * 1000;
+const HTTP_RATE_MAX = Number(process.env.HTTP_RATE_MAX) || 100;
+
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  windowMs: HTTP_RATE_WINDOW_MS,
+  max: HTTP_RATE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Слишком много запросов, попробуйте позже" },
@@ -22,8 +27,25 @@ app.use(limiter);
 // Socket.IO rate limiting
 const socketRateLimit = new Map();
 const SOCKET_RATE_WINDOW_MS =
-  Number(process.env.SOCKET_RATE_WINDOW_MS) || 10_000;
-const SOCKET_RATE_MAX_EVENTS = Number(process.env.SOCKET_RATE_MAX_EVENTS) || 30;
+  Number(process.env.SOCKET_RATE_WINDOW_MS) || 15_000;
+const SOCKET_RATE_MAX_EVENTS = Number(process.env.SOCKET_RATE_MAX_EVENTS) || 100;
+const SOCKET_RATE_WARN_THRESHOLD = Number(process.env.SOCKET_RATE_WARN_THRESHOLD) || 60;
+const SOCKET_RATE_CLEANUP_INTERVAL = 30_000; // Очистка каждые 30 сек
+
+// Периодическая очистка устаревших записей
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [id, record] of socketRateLimit.entries()) {
+    if (now > record.resetAt) {
+      socketRateLimit.delete(id);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`[RateLimit] Очищено ${cleaned} устаревших записей`);
+  }
+}, SOCKET_RATE_CLEANUP_INTERVAL);
 
 io.use((socket, next) => {
   socketRateLimit.set(socket.id, {
@@ -36,6 +58,8 @@ io.use((socket, next) => {
 function checkSocketRateLimit(socket) {
   const record = socketRateLimit.get(socket.id);
   if (!record) return true;
+
+  // Сброс счётчика при истечении окна
   if (Date.now() > record.resetAt) {
     socketRateLimit.set(socket.id, {
       count: 1,
@@ -43,12 +67,25 @@ function checkSocketRateLimit(socket) {
     });
     return true;
   }
+
   record.count++;
+
+  // Предупреждение при достижении warn-порога
+  if (record.count === SOCKET_RATE_WARN_THRESHOLD) {
+    console.warn(
+      `[RateLimit] Предупреждение: ${socket.id} (${record.count}/${SOCKET_RATE_MAX_EVENTS})`,
+    );
+  }
+
+  // Отключение только при превышении жёсткого лимита
   if (record.count > SOCKET_RATE_MAX_EVENTS) {
+    console.warn(
+      `[RateLimit] Клиент отключён: ${socket.id} (${record.count}/${SOCKET_RATE_MAX_EVENTS})`,
+    );
     socket.disconnect(true);
-    console.log(`Клиент отключён за превышение лимита событий: ${socket.id}`);
     return false;
   }
+
   return true;
 }
 
@@ -297,6 +334,64 @@ function shuffleArray(array) {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+/**
+ * Найти отключённого игрока по имени
+ * @returns {[string, object]|undefined}
+ */
+function findDisconnectedPlayerByName(name) {
+  return Object.entries(players).find(
+    ([id, p]) => p.name === name && p.disconnected,
+  );
+}
+
+/**
+ * Отправить восстановленному игроку его текущее состояние
+ */
+function sendRestoredPlayerState(socketId, player, quizId, quiz) {
+  if (!quizId || !quiz) return;
+
+  if (player.currentQuestion) {
+    // Игрок был на вопросе — отправляем его обратно
+    const question = quiz.questions[player.currentQuestion.originalIndex];
+    const timeLimit = question.timeLimit || QUESTION_TIME;
+    let timeLeft = timeLimit;
+    if (player.questionStartTime) {
+      const elapsed = (Date.now() - player.questionStartTime) / 1000;
+      timeLeft = Math.max(0, Math.ceil(timeLimit - elapsed));
+    }
+    io.to(socketId).emit("new-question", {
+      questionIndex: player.currentQuestion.questionNumber,
+      totalQuestions: quiz.questions.length,
+      text: question.text,
+      type: question.type,
+      options: question.options,
+      correct: question.correct,
+      image: question.image,
+      timeLeft: timeLeft,
+    });
+  } else if (player.answeredQuestions.length > 0) {
+    // Игрок уже ответил на вопросы
+    if (player.answeredQuestions.length >= quiz.questions.length) {
+      io.to(socketId).emit("player-quiz-ended", {
+        score: player.score,
+        totalQuestions: quiz.questions.length,
+        answeredCount: player.answeredQuestions.length,
+        percentage: Math.round(
+          (player.score / quiz.questions.length) * 100,
+        ),
+      });
+    }
+    // Иначе — игрок на экране ожидания, ничего не отправляем
+  } else if (quizStarted) {
+    // Игрок был в игре но ещё не получил вопрос
+    io.to(socketId).emit("quiz-ready", {
+      quizId,
+      name: quiz.name,
+      questionsCount: quiz.questions.length,
+    });
+  }
 }
 
 io.on("connection", (socket) => {
@@ -731,79 +826,70 @@ io.on("connection", (socket) => {
     }
 
     // Если есть сохранённый ID, пытаемся восстановить игрока (даже если викторина запущена)
-    if (savedId && players[savedId]) {
-      const player = players[savedId];
-      // Перепривязываем к новому сокету
-      players[socket.id] = player;
-      // Сбрасываем статус отключения
-      player.disconnected = false;
-      delete players[savedId];
+    if (savedId) {
+      if (players[savedId]) {
+        // Игрок найден по старому socket.id
+        const player = players[savedId];
+        players[socket.id] = player;
+        player.disconnected = false;
+        delete players[savedId];
 
-      console.log(
-        `Игрок восстановлен по ID: ${player.name} (${savedId} → ${socket.id})`,
-      );
-      socket.emit("registered", {
-        playerId: socket.id,
-        name: player.name,
-        restored: true,
-      });
+        console.log(
+          `[Session] Игрок восстановлен по ID: ${player.name} (${savedId} → ${socket.id})`,
+        );
+        socket.emit("registered", {
+          playerId: socket.id,
+          name: player.name,
+          restored: true,
+        });
 
-      if (currentQuizId && player.currentQuestion) {
         const quiz = quizzes.find((q) => q.id === currentQuizId);
-        if (quiz) {
-          const question = quiz.questions[player.currentQuestion.originalIndex];
-          // Вычисляем оставшееся время на основе questionStartTime
-          const timeLimit = question.timeLimit || QUESTION_TIME;
-          let timeLeft = timeLimit;
-          if (player.questionStartTime) {
-            const elapsed = (Date.now() - player.questionStartTime) / 1000;
-            timeLeft = Math.max(0, Math.ceil(timeLimit - elapsed));
-          }
-          socket.emit("new-question", {
-            questionIndex: player.currentQuestion.questionNumber,
-            totalQuestions: quiz.questions.length,
-            text: question.text,
-            type: question.type,
-            options: question.options,
-            correct: question.correct,
-            image: question.image,
-            timeLeft: timeLeft,
-          });
-        }
-      } else if (currentQuizId && player.answeredQuestions.length > 0) {
-        // Игрок уже ответил на вопросы — отправляем его на экран ожидания или финальный экран
-        const quiz = quizzes.find((q) => q.id === currentQuizId);
-        if (quiz && player.answeredQuestions.length >= quiz.questions.length) {
-          // Все вопросы отвечены — отправляем на финальный экран
-          socket.emit("player-quiz-ended", {
-            score: player.score,
-            totalQuestions: quiz.questions.length,
-            answeredCount: player.answeredQuestions.length,
-            percentage: Math.round(
-              (player.score / quiz.questions.length) * 100,
-            ),
-          });
-        }
+        sendRestoredPlayerState(socket.id, player, currentQuizId, quiz);
+        broadcastLeaderboard();
+        return;
       }
-      broadcastLeaderboard();
+
+      // Fallback: ищем игрока по имени среди отключённых
+      const disconnectedPlayer = findDisconnectedPlayerByName(name);
+      if (disconnectedPlayer) {
+        const [oldId, player] = disconnectedPlayer;
+        players[socket.id] = player;
+        player.disconnected = false;
+        delete players[oldId];
+
+        console.log(
+          `[Session] Игрок восстановлен по имени: ${player.name} (${oldId} → ${socket.id})`,
+        );
+        socket.emit("registered", {
+          playerId: socket.id,
+          name: player.name,
+          restored: true,
+        });
+
+        const quiz = quizzes.find((q) => q.id === currentQuizId);
+        sendRestoredPlayerState(socket.id, player, currentQuizId, quiz);
+        broadcastLeaderboard();
+        return;
+      }
+
+      // Игрок не найден — сессия устарела
+      console.log(`[Session] Сессия игрока не найдена: ${savedId}, имя: ${name}`);
+      socket.emit("session-not-found");
       return;
     }
 
-    // Проверяем, есть ли игрок с таким именем (переподключение после отключения)
-    const existingPlayer = Object.entries(players).find(
-      ([id, p]) => p.name === name && p.disconnected,
-    );
+    // Проверяем, есть ли игрок с таким именем (переподключение после отключения без savedId)
+    const existingPlayer = findDisconnectedPlayerByName(name);
 
     if (existingPlayer) {
       const [oldId, player] = existingPlayer;
       // Перепривязываем к новому сокету
       players[socket.id] = player;
-      // Сбрасываем статус отключения
       player.disconnected = false;
       delete players[oldId];
 
       console.log(
-        `Игрок переподключён по имени: ${player.name} (${oldId} → ${socket.id})`,
+        `[Session] Игрок переподключён по имени: ${player.name} (${oldId} → ${socket.id})`,
       );
       socket.emit("registered", {
         playerId: socket.id,
@@ -811,29 +897,8 @@ io.on("connection", (socket) => {
         restored: true,
       });
 
-      if (currentQuizId && quizStarted && player.currentQuestion) {
-        const quiz = quizzes.find((q) => q.id === currentQuizId);
-        if (quiz) {
-          const question = quiz.questions[player.currentQuestion.originalIndex];
-          // Вычисляем оставшееся время на основе questionStartTime
-          const timeLimit = question.timeLimit || QUESTION_TIME;
-          let timeLeft = timeLimit;
-          if (player.questionStartTime) {
-            const elapsed = (Date.now() - player.questionStartTime) / 1000;
-            timeLeft = Math.max(0, Math.ceil(timeLimit - elapsed));
-          }
-          socket.emit("new-question", {
-            questionIndex: player.currentQuestion.questionNumber,
-            totalQuestions: quiz.questions.length,
-            text: question.text,
-            type: question.type,
-            options: question.options,
-            correct: question.correct,
-            image: question.image,
-            timeLeft: timeLeft,
-          });
-        }
-      }
+      const quiz = quizzes.find((q) => q.id === currentQuizId);
+      sendRestoredPlayerState(socket.id, player, currentQuizId, quiz);
       broadcastLeaderboard();
       return;
     }
@@ -981,9 +1046,19 @@ io.on("connection", (socket) => {
     if (player) {
       console.log(`Игрок отключился: ${player.name}`);
       // Помечаем как отключённого, но НЕ удаляем — чтобы сохранить в рейтинге
+      // и дать время на восстановление сессии
       player.disconnected = true;
       player.lastSocketId = socket.id;
       broadcastLeaderboard();
+
+      // Автоматически удаляем игрока через 60 секунд если не восстановился
+      setTimeout(() => {
+        if (player.disconnected && players[socket.id]) {
+          delete players[socket.id];
+          console.log(`Игрок удалён после таймаута: ${player.name}`);
+          broadcastLeaderboard();
+        }
+      }, 60_000);
     }
     if (adminSessions[socket.id]) {
       delete adminSessions[socket.id];

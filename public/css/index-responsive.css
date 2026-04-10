@@ -1,0 +1,148 @@
+/**
+ * Index Responsive — адаптивные стили для index.html
+ */
+
+/* Small phones (≤375px) */
+@media (max-width: 375px) {
+  body {
+    padding: 12px;
+  }
+
+  nav {
+    padding: 1rem 1.25rem;
+  }
+
+  .logo {
+    font-size: 1.25rem;
+  }
+
+  .secondary-action {
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .main-card {
+    padding: 1.5rem;
+    border-radius: 16px;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  p {
+    font-size: 0.875rem;
+  }
+
+  .question-text {
+    font-size: 1.1rem;
+  }
+
+  .timer-text {
+    font-size: 2rem;
+  }
+
+  .final-score {
+    font-size: 2.5rem;
+  }
+
+  .true-false-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .tf-btn {
+    padding: 1.25rem 1rem;
+  }
+
+  .matching-drag-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+
+/* Phones (≤480px) */
+@media (max-width: 480px) {
+  body {
+    padding: 16px;
+  }
+
+  nav {
+    padding: 1rem;
+  }
+
+  .secondary-action {
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .main-card {
+    padding: 1.75rem;
+    border-radius: 18px;
+  }
+
+  .player-info {
+    flex-wrap: wrap;
+  }
+
+  .player-score {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.75rem;
+  }
+
+  .restored-badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .option-btn {
+    padding: 0.875rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .ordering-item {
+    padding: 0.875rem 1rem;
+  }
+
+  .matching-item {
+    padding: 0.875rem;
+  }
+
+  .matching-dropzone {
+    padding: 0.875rem;
+    font-size: 0.85rem;
+  }
+
+  .leaderboard-table th,
+  .leaderboard-table td {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Tablets and up (≥768px) */
+@media (min-width: 768px) {
+  .main-card {
+    max-width: 520px;
+    padding: 3rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  .question-text {
+    font-size: 1.35rem;
+  }
+
+  .options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .option-btn {
+    text-align: center;
+    justify-content: center;
+  }
+}

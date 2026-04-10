@@ -1,0 +1,276 @@
+/**
+ * Admin Editors — стили редакторов ответов (MC, TF, text, ordering, matching)
+ */
+
+/* Карточки ответов */
+.answers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.answer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.answer-row:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.answer-row textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  resize: none;
+  font-family: inherit;
+  padding: 0.5rem 0;
+  min-height: 24px;
+}
+
+.answer-row textarea:focus {
+  outline: none;
+}
+
+.answer-row .row-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.answer-row .row-actions button {
+  background: rgba(148, 163, 184, 0.1);
+  border: none;
+  color: var(--text-muted);
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.answer-row .row-actions .answer-image-btn {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.answer-row .row-actions .answer-image-btn:hover {
+  background: rgba(139, 92, 246, 0.25);
+  color: var(--accent);
+}
+
+.answer-row .row-actions button:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+
+.answer-row .row-actions .correct-checkbox:hover {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.answer-row .answer-image-preview {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid var(--border);
+  transition: all 0.2s;
+}
+
+.answer-row .answer-image-preview:hover {
+  border-color: var(--danger);
+  transform: scale(1.05);
+}
+
+.answer-card .correct-checkbox {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: transparent;
+  font-size: 1.25rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.answer-row .correct-checkbox {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: transparent;
+  font-size: 1.25rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.answer-row .correct-checkbox:hover {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.answer-row .correct-checkbox.checked {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.answer-number {
+  width: 28px;
+  height: 28px;
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--accent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.add-answer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  transition: all 0.2s;
+  background: rgba(15, 23, 42, 0.3);
+  font-weight: 600;
+}
+
+.add-answer-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.answer-card-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.answer-position-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--accent);
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* True/False */
+.true-false-options {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.tf-option {
+  flex: 1;
+  padding: 1.5rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(15, 23, 42, 0.4);
+  color: var(--text);
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.tf-option:hover {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.tf-option.selected.true {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+}
+
+.tf-option.selected.false {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+/* Matching editor */
+.matching-editor-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.matching-editor-row input {
+  padding: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.matching-pair-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.matching-arrow {
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

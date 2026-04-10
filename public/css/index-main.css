@@ -1,0 +1,198 @@
+/**
+ * Index Main — основные стили игрока (карточка, навигация, инпуты)
+ */
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* Навигация */
+nav {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  padding: 1.5rem 2rem;
+}
+
+/* Ссылка на админку */
+.secondary-action {
+  display: inline-block;
+  background: linear-gradient(
+    135deg,
+    var(--accent) 0%,
+    var(--accent-hover) 100%
+  );
+  color: white !important;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 10px;
+  border: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  cursor: pointer;
+  letter-spacing: 0.3px;
+}
+
+.secondary-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+  background: linear-gradient(
+    135deg,
+    var(--accent-hover) 0%,
+    #6d28d9 100%
+  );
+}
+
+.secondary-action:active {
+  transform: translateY(0);
+}
+
+/* Основная карточка */
+.main-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2.5rem;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+p {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+/* Поля ввода */
+.input-group {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  text-align: center;
+  letter-spacing: 2px;
+  transition: all 0.3s ease;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+}
+
+input::placeholder {
+  letter-spacing: normal;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+/* Инфо об игроке */
+.player-info {
+  background: rgba(15, 23, 42, 0.5);
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.player-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.player-score {
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(139, 92, 246, 0.15);
+  padding: 0.35rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.restored-badge {
+  background: var(--success);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  margin-left: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Ожидание */
+.waiting {
+  color: var(--text-muted);
+  font-size: 1rem;
+  padding: 2rem 0;
+}
+
+.spinner {
+  border: 3px solid rgba(139, 92, 246, 0.2);
+  border-top: 3px solid var(--accent);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Финальный экран */
+.final-score {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 1.5rem 0;
+}
+
+.final-message {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}

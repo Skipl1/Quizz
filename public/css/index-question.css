@@ -1,0 +1,359 @@
+/**
+ * Index Question — стили экрана вопроса (таймер, все типы вопросов)
+ */
+
+/* Экран вопроса — общие */
+.question-number {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.question-type-badge {
+  display: inline-block;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent);
+  padding: 0.35rem 0.875rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+/* Таймер */
+.timer-text {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+}
+
+.timer-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent-hover) 100%
+  );
+  width: 100%;
+  transition: width 1s linear;
+}
+
+.timer-fill.warning {
+  background: linear-gradient(90deg, var(--warning) 0%, #d97706 100%);
+}
+
+.timer-fill.danger {
+  background: linear-gradient(90deg, var(--danger) 0%, #dc2626 100%);
+}
+
+/* Изображение вопроса */
+.question-image {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 12px;
+  margin-bottom: 1.25rem;
+  display: none;
+  object-fit: contain;
+}
+
+.question-image.show {
+  display: block;
+}
+
+/* Текст вопроса */
+.question-text {
+  font-size: 1.25rem;
+  color: var(--text);
+  margin-bottom: 1.25rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Подсказка */
+.answer-hint {
+  color: var(--accent);
+  font-weight: 500;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+/* Multiple Choice */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.option-btn {
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+  padding: 1rem 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.05);
+  text-align: left;
+  font-size: 0.95rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.option-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: var(--accent);
+}
+
+.option-btn.selected {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.option-btn.correct {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
+}
+
+.option-btn.incorrect {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+/* True/False */
+.true-false-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.tf-btn {
+  padding: 2rem 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+}
+
+.tf-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+}
+
+.tf-btn.true {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.tf-btn.false {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.tf-btn.selected {
+  color: white;
+}
+
+.tf-btn.true.selected {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.tf-btn.false.selected {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Text Answer */
+.text-answer-container {
+  margin: 1rem 0;
+}
+
+.text-answer-input {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  margin-bottom: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+}
+
+.text-answer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.text-answer-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Ordering — Drag and Drop */
+.ordering-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.ordering-item {
+  background: rgba(15, 23, 42, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.ordering-item:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.ordering-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+  transform: scale(1.02);
+}
+
+.ordering-item .drag-handle {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  cursor: grab;
+}
+
+.ordering-item .item-text {
+  flex: 1;
+  font-weight: 500;
+  text-align: left;
+}
+
+/* Matching — Drag and Drop */
+.matching-drag-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.matching-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.matching-column.drag-over {
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 12px;
+  padding: 0.5rem;
+}
+
+.matching-item {
+  background: rgba(15, 23, 42, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: grab;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.2s;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.matching-item.dropped {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--accent);
+  cursor: default;
+}
+
+.matching-item.matched {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--accent);
+  cursor: grab;
+}
+
+.matching-item.matched:hover {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: var(--accent-hover);
+}
+
+.matching-item.dragging {
+  opacity: 0.5;
+}
+
+.matching-dropzone {
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.matching-dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.matching-dropzone.has-item {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--text);
+}
+
+/* Сообщения */
+.time-up-message {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  padding: 1rem;
+  border-radius: 12px;
+  margin-top: 1rem;
+  font-weight: 600;
+  display: none;
+}
+
+.loading-next {
+  margin-top: 1rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  display: none;
+}
