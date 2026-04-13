@@ -66,6 +66,20 @@ socket.on("question-error", (data) => {
 });
 
 socket.on("question-updated", () => {
+  // Сбрасываем индекс редактирования только после успешного ответа сервера
+  window.editQuestionIndex = undefined;
+  // Возвращаем кнопку в исходное состояние
+  const saveBtn = document.getElementById("save-question-btn");
+  const cancelBtn = document.getElementById("cancel-edit-btn");
+  if (saveBtn) {
+    saveBtn.textContent = "Сохранить вопрос";
+    saveBtn.classList.add("btn-success");
+    saveBtn.classList.remove("btn-warning");
+  }
+  if (cancelBtn) {
+    cancelBtn.style.display = "none";
+  }
+  // Обновляем список вопросов
   socket.emit("get-quiz-questions", currentQuizId);
 });
 
@@ -249,7 +263,9 @@ socket.on("quiz-questions", (data) => {
       .getElementById("question-text")
       .scrollIntoView({ behavior: "smooth" });
 
-    window.editQuestionIndex = undefined;
+    // НЕ сбрасываем editQuestionIndex здесь — он нужен в saveQuestion()
+    // чтобы определить что мы обновляем, а не создаём
+    // Сброс произойдёт только в question-updated или cancelEditQuestion
     return;
   }
 

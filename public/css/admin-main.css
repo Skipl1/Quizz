@@ -85,7 +85,7 @@ textarea {
 }
 
 /* Скрытая кнопка */
-#cancel-edit-btn {
+#cancel-edit-btn.question-action-btn {
   display: none;
 }
 
@@ -291,4 +291,12 @@ textarea {
   background: var(--accent-hover);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+/* Кнопки действий с вопросами (Сохранить/Отмена) */
+.question-action-btn {
+  flex: 1;
+  padding: 1rem !important;
+  font-size: 0.95rem !important;
+  white-space: nowrap;
 }

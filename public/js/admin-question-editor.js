@@ -248,8 +248,8 @@ function saveQuestion() {
       image: imageBase64,
       timeLimit: selectedTime,
     });
-    // Сбрасываем индекс редактирования сразу
-    window.editQuestionIndex = undefined;
+    // НЕ сбрасываем индекс здесь — сбросим только после ответа сервера
+    // в обработчике question-updated
   } else {
     socket.emit("add-question", {
       quizId: currentQuizId,
