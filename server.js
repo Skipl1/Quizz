@@ -11,9 +11,9 @@ const io = new Server(server);
 
 // === RATE LIMITING ===
 
-// HTTP rate limiting
-const HTTP_RATE_WINDOW_MS = Number(process.env.HTTP_RATE_WINDOW_MS) || 15 * 60 * 1000;
-const HTTP_RATE_MAX = Number(process.env.HTTP_RATE_MAX) || 100;
+// HTTP rate limiting — только для HTML/API, не для статики (CSS/JS/картинки)
+const HTTP_RATE_WINDOW_MS = Number(process.env.HTTP_RATE_WINDOW_MS) || 5 * 60 * 1000; // 5 минут
+const HTTP_RATE_MAX = Number(process.env.HTTP_RATE_MAX) || 1000; // 1000 запросов за окно
 
 const limiter = rateLimit({
   windowMs: HTTP_RATE_WINDOW_MS,
@@ -21,6 +21,11 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Слишком много запросов, попробуйте позже" },
+  skip: (req) => {
+    // Пропускаем статические файлы
+    const skipExtensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf'];
+    return skipExtensions.some((ext) => req.path.endsWith(ext));
+  },
 });
 app.use(limiter);
 
