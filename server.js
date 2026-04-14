@@ -961,8 +961,19 @@ io.on("connection", (socket) => {
           JSON.stringify(question.correct);
         pointsEarned = isCorrect ? 1 : 0;
       } else if (answerData.type === "matching") {
-        // Matching — полностью правильно или нет
-        pointsEarned = answerData.correct ? 1 : 0;
+        // Matching — серверная проверка реальных пар
+        const pairs = answerData.pairs; // [{questionIndex, answerIndex}, ...]
+        if (!Array.isArray(pairs)) {
+          pointsEarned = 0;
+        } else {
+          const isFullyCorrect =
+            pairs.length === question.correct.length &&
+            pairs.every((p) => {
+              // Проверяем что questionIndex === answerIndex (правильная пара)
+              return p.questionIndex === p.answerIndex;
+            });
+          pointsEarned = isFullyCorrect ? 1 : 0;
+        }
       } else if (answerData.type === "text") {
         // Текстовый ответ — полностью правильно или нет
         const userAnswer = sanitizeInput(answerData.answer, 500)

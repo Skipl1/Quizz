@@ -123,12 +123,12 @@ function submitMatchingFinal() {
   document.getElementById("submit-matching-btn").style.display = "none";
   document.getElementById("loading-next").style.display = "block";
 
-  // Проверяем правильность
-  const allCorrect = matchingUserPairs.every(
-    (p) => p.questionIndex === p.answerIndex,
-  );
+  // Отправляем реальные пары на сервер для проверки
   socket.emit("submit-answer", {
     type: "matching",
-    correct: allCorrect,
+    pairs: matchingUserPairs.map((p) => ({
+      questionIndex: p.questionIndex,
+      answerIndex: p.answerIndex,
+    })),
   });
 }

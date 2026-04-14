@@ -73,12 +73,12 @@ function timeUp() {
     socket.emit("submit-answer", { type: "ordering", answer: userOrder });
   } else if (currentQuestionType === "matching") {
     if (matchingUserPairs.length >= matchingTotal) {
-      const allCorrect = matchingUserPairs.every(
-        (p) => p.questionIndex === p.answerIndex,
-      );
       socket.emit("submit-answer", {
         type: "matching",
-        correct: allCorrect,
+        pairs: matchingUserPairs.map((p) => ({
+          questionIndex: p.questionIndex,
+          answerIndex: p.answerIndex,
+        })),
       });
     } else {
       socket.emit("time-up");
