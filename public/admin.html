@@ -47,14 +47,36 @@
       <!-- Main -->
       <div id="main-screen" class="hidden">
         <div class="tabs">
-          <button class="tab active" onclick="showTab('quizzes')">
+          <button
+            type="button"
+            class="tab active"
+            data-tab="quizzes"
+            onclick="showTab('quizzes', event)"
+          >
             Викторины
           </button>
-          <button class="tab" onclick="showTab('play')">Играть</button>
           <button
+            type="button"
+            class="tab"
+            data-tab="results"
+            onclick="showTab('results', event)"
+          >
+            Результаты
+          </button>
+          <button
+            type="button"
+            class="tab"
+            data-tab="play"
+            onclick="showTab('play', event)"
+          >
+            Играть
+          </button>
+          <button
+            type="button"
             class="tab hidden"
             id="leaderboard-tab-btn"
-            onclick="showTab('leaderboard')"
+            data-tab="leaderboard"
+            onclick="showTab('leaderboard', event)"
           >
             Рейтинг
           </button>
@@ -1033,6 +1055,42 @@
           </div>
         </div>
 
+        <!-- История результатов -->
+        <div id="results-tab" class="screen">
+          <div class="card">
+            <h2>История результатов</h2>
+            <p class="results-intro">
+              Здесь отображаются завершённые прохождения (когда игрок прошёл все
+              вопросы). Нужна подключённая PostgreSQL; для викторин, созданных
+              только в памяти без БД, записей не будет.
+            </p>
+            <div class="results-toolbar">
+              <label for="results-quiz-filter">Викторина</label>
+              <select id="results-quiz-filter" onchange="loadQuizResults()">
+                <option value="">Все (последние 200)</option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="loadQuizResults()"
+              >
+                Обновить
+              </button>
+              <button
+                type="button"
+                class="btn btn-success"
+                id="results-csv-btn"
+                disabled
+                onclick="downloadQuizHistoryCsv()"
+              >
+                Выгрузить в CSV
+              </button>
+            </div>
+            <p id="results-error" class="results-error hidden" role="alert"></p>
+            <div id="results-table-wrap" class="results-table-wrap"></div>
+          </div>
+        </div>
+
         <!-- Игра -->
         <div id="play-tab" class="screen">
           <div class="card">
@@ -1122,6 +1180,7 @@
     <script src="/js/admin-media.js"></script>
     <script src="/js/admin-game-control.js"></script>
     <script src="/js/admin-sockets.js"></script>
+    <script src="/js/admin-results.js"></script>
     <script src="/js/admin-csv.js"></script>
     <script src="/js/admin-qr.js"></script>
     <script src="/js/admin-init.js"></script>

@@ -4,17 +4,26 @@
 
 /**
  * Переключает видимую вкладку в админ-панели.
- * @param {string} tabName - Имя вкладки (quizzes, play, leaderboard)
+ * @param {string} tabName - Имя вкладки (quizzes, play, results, leaderboard)
+ * @param {MouseEvent} [ev] - событие клика (если вызов из onclick)
  */
-function showTab(tabName) {
+function showTab(tabName, ev) {
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));
   document
     .querySelectorAll(".screen")
     .forEach((s) => s.classList.remove("active"));
-  event.target.classList.add("active");
-  document.getElementById(tabName + "-tab").classList.add("active");
+  const target =
+    ev && ev.target && typeof ev.target.closest === "function"
+      ? ev.target.closest(".tab")
+      : document.querySelector(`.tab[data-tab="${tabName}"]`);
+  if (target) target.classList.add("active");
+  const screen = document.getElementById(tabName + "-tab");
+  if (screen) screen.classList.add("active");
+  if (tabName === "results" && typeof loadQuizResults === "function") {
+    loadQuizResults();
+  }
 }
 
 /**

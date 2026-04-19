@@ -345,9 +345,7 @@ socket.on("quiz-stopped", () => {
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));
-  document
-    .querySelector(".tab[onclick=\"showTab('quizzes')\"]")
-    .classList.add("active");
+  document.querySelector('.tab[data-tab="quizzes"]').classList.add("active");
   document
     .querySelectorAll(".screen")
     .forEach((s) => s.classList.remove("active"));
@@ -433,7 +431,8 @@ socket.on("all-players-finished", (data) => {
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));
-  document.getElementById("leaderboard-tab-btn").classList.add("active");
+  const lbTab = document.getElementById("leaderboard-tab-btn");
+  if (lbTab) lbTab.classList.add("active");
   document
     .querySelectorAll(".screen")
     .forEach((s) => s.classList.remove("active"));

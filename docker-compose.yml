@@ -1,0 +1,24 @@
+# PostgreSQL на вашем сервере. Перед запуском задайте POSTGRES_* в корневом .env
+# (см. .env.example). На Render в DATABASE_URL укажите postgresql://USER:PASS@хост:5432/DB
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quiz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-quiz}
+    ports:
+      - "${POSTGRES_PUBLISH_PORT:-5432}:5432"
+    volumes:
+      - quiz_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  quiz_pgdata:

@@ -4,8 +4,14 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const rateLimit = require("express-rate-limit");
+const { getPoolOptions } = require("./lib/pgPoolConfig");
 
 const app = express();
+
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy === "1" || trustProxy === "true" || trustProxy === "yes") {
+  app.set("trust proxy", 1);
+}
 const server = http.createServer(app);
 const io = new Server(server);
 
@@ -117,33 +123,21 @@ const ADMIN_CREDENTIALS = {
   password: process.env.ADMIN_PASSWORD || "CHANGE_ME_set_in_env",
 };
 
-// Подключение к PostgreSQL только из переменной окружения
-const DATABASE_URL = process.env.DATABASE_URL || null;
+// Подключение к PostgreSQL из переменных окружения (см. .env.example)
+const poolOptions = getPoolOptions();
+const pool = poolOptions ? new Pool(poolOptions) : null;
 
-if (!DATABASE_URL) {
+if (!pool) {
   console.log("⚠️ DATABASE_URL не установлен. Работа в режиме RAM (без БД).");
   console.log("   Для подключения создайте файл .env (см. .env.example)");
 }
-
-const pool = DATABASE_URL
-  ? new Pool({
-      connectionString: DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeoutMillis: 60000, // 60s для Render (пробуждение БД)
-      idleTimeoutMillis: 60000,
-      statementTimeoutMillis: 30000,
-      max: 5,
-    })
-  : null;
 
 // База данных в оперативной памяти (если нет БД)
 let quizzes = [];
 let currentQuizId = null;
 let quizStarted = false;
 let quizFinished = false;
-const QUESTION_TIME = 30;
+const QUESTION_TIME = Number(process.env.QUESTION_TIME_SECONDS) || 30;
 const players = {};
 const adminSessions = {};
 
@@ -217,6 +211,21 @@ async function initDatabase() {
         order_answer JSONB
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS quiz_results (
+        id SERIAL PRIMARY KEY,
+        quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+        player_name VARCHAR(255) NOT NULL,
+        score NUMERIC(12, 6) NOT NULL,
+        total_questions INTEGER NOT NULL,
+        answered_count INTEGER NOT NULL,
+        percentage SMALLINT,
+        finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_quiz_results_quiz_id ON quiz_results(quiz_id)`,
+    );
     console.log("База данных подключена и готова.");
 
     // Загрузка викторин из БД
@@ -339,6 +348,30 @@ function shuffleArray(array) {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+/**
+ * Сохранить итог прохождения викторины (только для викторин из БД).
+ */
+async function saveQuizResultToDb(quiz, player, payload) {
+  if (!pool || !quiz?.dbId) return;
+  try {
+    await pool.query(
+      `INSERT INTO quiz_results
+        (quiz_id, player_name, score, total_questions, answered_count, percentage)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        quiz.dbId,
+        player.name,
+        payload.score,
+        payload.totalQuestions,
+        payload.answeredCount,
+        payload.percentage,
+      ],
+    );
+  } catch (err) {
+    console.error("Ошибка сохранения результата квиза в БД:", err.message);
+  }
 }
 
 /**
@@ -794,6 +827,107 @@ io.on("connection", (socket) => {
     socket.emit("players-count", { count: onlineCount });
   });
 
+  // История результатов (таблица quiz_results)
+  socket.on("get-quiz-results", async (payload) => {
+    if (!checkSocketRateLimit(socket)) return;
+    if (!adminSessions[socket.id]) return;
+
+    const raw =
+      payload != null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {};
+    const quizId =
+      raw.quizId !== undefined && raw.quizId !== null
+        ? String(raw.quizId)
+        : typeof payload === "string"
+          ? payload
+          : "";
+
+    if (!pool) {
+      socket.emit("quiz-results", {
+        error:
+          "База данных не подключена — результаты не сохраняются и не отображаются.",
+        results: [],
+        mode: quizId ? "quiz" : "all",
+        quizId: quizId || null,
+      });
+      return;
+    }
+
+    try {
+      if (!quizId) {
+        const res = await pool.query(
+          `SELECT r.id, r.quiz_id, q.name AS quiz_name, r.player_name, r.score,
+                  r.total_questions, r.answered_count, r.percentage, r.finished_at
+           FROM quiz_results r
+           INNER JOIN quizzes q ON q.id = r.quiz_id
+           ORDER BY r.finished_at DESC
+           LIMIT 200`,
+        );
+        socket.emit("quiz-results", {
+          results: res.rows.map((row) => ({
+            id: row.id,
+            quizId: row.quiz_id,
+            quizName: row.quiz_name,
+            playerName: row.player_name,
+            score: Number(row.score),
+            totalQuestions: row.total_questions,
+            answeredCount: row.answered_count,
+            percentage: row.percentage,
+            finishedAt: row.finished_at,
+          })),
+          mode: "all",
+          quizId: null,
+        });
+        return;
+      }
+
+      const quiz = quizzes.find((q) => q.id === quizId);
+      if (!quiz || !quiz.dbId) {
+        socket.emit("quiz-results", {
+          error: quiz
+            ? "Для этой викторины нет истории в базе (создана без БД)."
+            : "Викторина не найдена.",
+          results: [],
+          mode: "quiz",
+          quizId,
+        });
+        return;
+      }
+
+      const res = await pool.query(
+        `SELECT r.id, r.player_name, r.score, r.total_questions, r.answered_count, r.percentage, r.finished_at
+         FROM quiz_results r
+         WHERE r.quiz_id = $1
+         ORDER BY r.finished_at DESC
+         LIMIT 500`,
+        [quiz.dbId],
+      );
+      socket.emit("quiz-results", {
+        results: res.rows.map((row) => ({
+          id: row.id,
+          playerName: row.player_name,
+          score: Number(row.score),
+          totalQuestions: row.total_questions,
+          answeredCount: row.answered_count,
+          percentage: row.percentage,
+          finishedAt: row.finished_at,
+        })),
+        mode: "quiz",
+        quizId,
+        quizName: quiz.name,
+      });
+    } catch (err) {
+      console.error("Ошибка загрузки результатов:", err.message);
+      socket.emit("quiz-results", {
+        error: "Не удалось загрузить результаты: " + err.message,
+        results: [],
+        mode: quizId ? "quiz" : "all",
+        quizId: quizId || null,
+      });
+    }
+  });
+
   // Старт викторины
   socket.on("start-quiz", () => {
     if (!adminSessions[socket.id]) return;
@@ -922,6 +1056,7 @@ io.on("connection", (socket) => {
       currentQuestion: null,
       answeredQuestions: [],
       questionStartTime: null,
+      quizCompletionHandled: false,
     };
     console.log(`Игрок зарегистрирован: ${name}`);
     socket.emit("registered", { playerId: socket.id, name, restored: false });
@@ -1092,6 +1227,7 @@ function initPlayerQuestions(playerId, quiz) {
   players[playerId].currentQuestion = null;
   players[playerId].score = 0;
   players[playerId].isProcessingAnswer = false;
+  players[playerId].quizCompletionHandled = false;
 }
 
 function sendNextQuestionToPlayer(playerId, quiz) {
@@ -1103,6 +1239,9 @@ function sendNextQuestionToPlayer(playerId, quiz) {
   );
 
   if (nextIndex === undefined) {
+    if (player.quizCompletionHandled) return;
+    player.quizCompletionHandled = true;
+
     const playerScore = player.score;
     const totalQuestions = quiz.questions.length;
     const answeredCount = player.answeredQuestions.length;
@@ -1110,12 +1249,15 @@ function sendNextQuestionToPlayer(playerId, quiz) {
     const percentage =
       totalQuestions > 0 ? Math.round((playerScore / totalQuestions) * 100) : 0;
 
-    io.to(playerId).emit("player-quiz-ended", {
+    const endPayload = {
       score: playerScore,
       totalQuestions,
       answeredCount,
       percentage,
-    });
+    };
+    void saveQuizResultToDb(quiz, player, endPayload);
+
+    io.to(playerId).emit("player-quiz-ended", endPayload);
 
     // Проверка: все ли игроки завершили
     checkAllPlayersFinished(quiz);

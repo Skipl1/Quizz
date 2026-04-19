@@ -235,3 +235,80 @@
   color: var(--text-muted);
   margin-top: 0.25rem;
 }
+
+/* История результатов */
+.results-intro {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+
+.results-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.results-toolbar label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.results-toolbar select {
+  flex: 1;
+  min-width: 200px;
+  max-width: 420px;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.results-error {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.results-error.hidden {
+  display: none;
+}
+
+.results-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.admin-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-results-table th,
+.admin-results-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-results-table th {
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-results-table tbody tr:hover {
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.admin-results-table tbody tr:last-child td {
+  border-bottom: none;
+}
