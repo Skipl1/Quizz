@@ -1,18 +1,16 @@
 require("dotenv").config();
 const { Pool } = require("pg");
+const { getPoolOptions } = require("./lib/pgPoolConfig");
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const poolOptions = getPoolOptions();
 
-if (!DATABASE_URL) {
+if (!poolOptions) {
   console.error("❌ Ошибка: DATABASE_URL не установлен.");
   console.error("   Создайте файл .env на основе .env.example");
   process.exit(1);
 }
 
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool(poolOptions);
 
 async function createTables() {
   try {
@@ -41,6 +39,25 @@ async function createTables() {
       )
     `);
     console.log("✅ Таблица questions создана");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS quiz_results (
+        id SERIAL PRIMARY KEY,
+        quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+        player_name VARCHAR(255) NOT NULL,
+        score NUMERIC(12, 6) NOT NULL,
+        total_questions INTEGER NOT NULL,
+        answered_count INTEGER NOT NULL,
+        percentage SMALLINT,
+        finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("✅ Таблица quiz_results создана");
+
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_quiz_results_quiz_id ON quiz_results(quiz_id)`,
+    );
+    console.log("✅ Индекс idx_quiz_results_quiz_id");
 
     // Добавим колонку для ordering вопросов если её нет
     try {

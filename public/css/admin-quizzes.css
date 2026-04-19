@@ -1,0 +1,314 @@
+/**
+ * Admin Quizzes — стили управления викторинами (список, детали, типы вопросов)
+ */
+
+/* Список викторин */
+.quiz-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 12px;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.quiz-item:hover {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: var(--border);
+  transform: translateX(4px);
+}
+
+.quiz-item.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--accent);
+}
+
+.quiz-item .name {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.quiz-item .count {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.quiz-item.active .count {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.quiz-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Детали викторины */
+.quiz-detail {
+  display: none;
+}
+
+.quiz-detail.active {
+  display: block;
+}
+
+.quiz-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.quiz-header h3 {
+  font-size: 1.25rem;
+  color: var(--text);
+  margin: 0;
+}
+
+.back-btn {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  min-height: 44px;
+}
+
+.back-btn:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text);
+}
+
+/* Типы вопросов */
+.question-types {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.question-type {
+  padding: 0.75rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  background: rgba(15, 23, 42, 0.4);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.question-type:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.question-type.selected {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent);
+}
+
+/* Список вопросов */
+.questions-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.question-item-card {
+  padding: 1rem 1.25rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 12px;
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+}
+
+.question-item-card .q-number {
+  width: 32px;
+  height: 32px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.question-item-card .q-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.question-item-card .q-text {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  word-wrap: break-word;
+}
+
+.question-item-card .q-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.question-item-card .q-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.question-item-card .q-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+}
+
+.question-item-card .q-actions svg {
+  display: block;
+}
+
+/* Форма — секции */
+.form-section {
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.form-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.section-number {
+  width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.section-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* История результатов */
+.results-intro {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+
+.results-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.results-toolbar label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.results-toolbar select {
+  flex: 1;
+  min-width: 200px;
+  max-width: 420px;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.results-error {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.results-error.hidden {
+  display: none;
+}
+
+.results-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.admin-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-results-table th,
+.admin-results-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-results-table th {
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-results-table tbody tr:hover {
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.admin-results-table tbody tr:last-child td {
+  border-bottom: none;
+}

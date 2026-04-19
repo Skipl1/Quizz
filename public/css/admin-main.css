@@ -1,0 +1,302 @@
+/**
+ * Admin Main — основные стили админки (layout, карточки, навигация, табы)
+ */
+
+body {
+  padding: 2rem 1rem;
+}
+
+/* Навигация */
+nav {
+  max-width: 1000px;
+  margin: 0 auto 2rem;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 1.75rem;
+  margin-bottom: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.card {
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.card h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.card h3 {
+  font-size: 1rem;
+  margin: 1.5rem 0 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.card h4 {
+  font-size: 0.9rem;
+  margin: 1.25rem 0 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Инпуты */
+input[type="text"],
+input[type="password"],
+textarea {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid var(--border);
+  padding: 0.875rem 1rem;
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Скрытая кнопка */
+#cancel-edit-btn.question-action-btn {
+  display: none;
+}
+
+/* Табы */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 0.35rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1;
+  min-width: 100px;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: all 0.2s;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* Статус */
+.status {
+  text-align: center;
+  color: var(--text-muted);
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+/* QR-код кнопка в карточке */
+.qr-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: rgba(139, 92, 246, 0.15);
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.qr-card-btn:hover {
+  background: var(--accent);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.qr-card-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.qr-card-btn:hover svg {
+  transform: scale(1.05);
+}
+
+/* QR Modal */
+.qr-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.qr-modal.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.qr-modal-content {
+  background: linear-gradient(135deg, var(--bg-card), rgba(30, 20, 60, 0.95));
+  border: 2px solid var(--accent);
+  border-radius: 20px;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(139, 92, 246, 0.3);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.qr-close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.qr-close-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.qr-modal h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.qr-hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+#qrcode {
+  display: inline-block;
+  padding: 1rem;
+  background: white;
+  border-radius: 16px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+#qrcode img {
+  display: block;
+  max-width: 100%;
+}
+
+#qrcode canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.qr-link-btn {
+  display: inline-block;
+  padding: 0.875rem 1.5rem;
+  background: var(--accent);
+  color: white;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-link-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+/* Кнопки действий с вопросами (Сохранить/Отмена) */
+.question-action-btn {
+  flex: 1;
+  padding: 1rem !important;
+  font-size: 0.95rem !important;
+  white-space: nowrap;
+}

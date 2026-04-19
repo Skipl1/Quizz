@@ -4,44 +4,99 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const rateLimit = require("express-rate-limit");
+const { getPoolOptions } = require("./lib/pgPoolConfig");
 
 const app = express();
+
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy === "1" || trustProxy === "true" || trustProxy === "yes") {
+  app.set("trust proxy", 1);
+}
 const server = http.createServer(app);
 const io = new Server(server);
 
 // === RATE LIMITING ===
+
+// HTTP rate limiting — только для HTML/API, не для статики (CSS/JS/картинки)
+const HTTP_RATE_WINDOW_MS = Number(process.env.HTTP_RATE_WINDOW_MS) || 5 * 60 * 1000; // 5 минут
+const HTTP_RATE_MAX = Number(process.env.HTTP_RATE_MAX) || 1000; // 1000 запросов за окно
+
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  windowMs: HTTP_RATE_WINDOW_MS,
+  max: HTTP_RATE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Слишком много запросов, попробуйте позже" },
+  skip: (req) => {
+    // Пропускаем статические файлы
+    const skipExtensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf'];
+    return skipExtensions.some((ext) => req.path.endsWith(ext));
+  },
 });
 app.use(limiter);
 
 // Socket.IO rate limiting
 const socketRateLimit = new Map();
-const SOCKET_RATE_WINDOW_MS = Number(process.env.SOCKET_RATE_WINDOW_MS) || 10_000;
-const SOCKET_RATE_MAX_EVENTS = Number(process.env.SOCKET_RATE_MAX_EVENTS) || 30;
+const SOCKET_RATE_WINDOW_MS =
+  Number(process.env.SOCKET_RATE_WINDOW_MS) || 15_000;
+const SOCKET_RATE_MAX_EVENTS = Number(process.env.SOCKET_RATE_MAX_EVENTS) || 100;
+const SOCKET_RATE_WARN_THRESHOLD = Number(process.env.SOCKET_RATE_WARN_THRESHOLD) || 60;
+const SOCKET_RATE_CLEANUP_INTERVAL = 30_000; // Очистка каждые 30 сек
+
+// Периодическая очистка устаревших записей
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [id, record] of socketRateLimit.entries()) {
+    if (now > record.resetAt) {
+      socketRateLimit.delete(id);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`[RateLimit] Очищено ${cleaned} устаревших записей`);
+  }
+}, SOCKET_RATE_CLEANUP_INTERVAL);
 
 io.use((socket, next) => {
-  socketRateLimit.set(socket.id, { count: 0, resetAt: Date.now() + SOCKET_RATE_WINDOW_MS });
+  socketRateLimit.set(socket.id, {
+    count: 0,
+    resetAt: Date.now() + SOCKET_RATE_WINDOW_MS,
+  });
   next();
 });
 
 function checkSocketRateLimit(socket) {
   const record = socketRateLimit.get(socket.id);
   if (!record) return true;
+
+  // Сброс счётчика при истечении окна
   if (Date.now() > record.resetAt) {
-    socketRateLimit.set(socket.id, { count: 1, resetAt: Date.now() + SOCKET_RATE_WINDOW_MS });
+    socketRateLimit.set(socket.id, {
+      count: 1,
+      resetAt: Date.now() + SOCKET_RATE_WINDOW_MS,
+    });
     return true;
   }
+
   record.count++;
+
+  // Предупреждение при достижении warn-порога
+  if (record.count === SOCKET_RATE_WARN_THRESHOLD) {
+    console.warn(
+      `[RateLimit] Предупреждение: ${socket.id} (${record.count}/${SOCKET_RATE_MAX_EVENTS})`,
+    );
+  }
+
+  // Отключение только при превышении жёсткого лимита
   if (record.count > SOCKET_RATE_MAX_EVENTS) {
+    console.warn(
+      `[RateLimit] Клиент отключён: ${socket.id} (${record.count}/${SOCKET_RATE_MAX_EVENTS})`,
+    );
     socket.disconnect(true);
-    console.log(`Клиент отключён за превышение лимита событий: ${socket.id}`);
     return false;
   }
+
   return true;
 }
 
@@ -68,32 +123,21 @@ const ADMIN_CREDENTIALS = {
   password: process.env.ADMIN_PASSWORD || "CHANGE_ME_set_in_env",
 };
 
-// Подключение к PostgreSQL только из переменной окружения
-const DATABASE_URL = process.env.DATABASE_URL || null;
+// Подключение к PostgreSQL из переменных окружения (см. .env.example)
+const poolOptions = getPoolOptions();
+const pool = poolOptions ? new Pool(poolOptions) : null;
 
-if (!DATABASE_URL) {
+if (!pool) {
   console.log("⚠️ DATABASE_URL не установлен. Работа в режиме RAM (без БД).");
   console.log("   Для подключения создайте файл .env (см. .env.example)");
 }
-
-const pool = DATABASE_URL
-  ? new Pool({
-      connectionString: DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeoutMillis: 60000, // 60s для Render (пробуждение БД)
-      idleTimeoutMillis: 60000,
-      statementTimeoutMillis: 30000,
-      max: 5,
-    })
-  : null;
 
 // База данных в оперативной памяти (если нет БД)
 let quizzes = [];
 let currentQuizId = null;
 let quizStarted = false;
-const QUESTION_TIME = 30;
+let quizFinished = false;
+const QUESTION_TIME = Number(process.env.QUESTION_TIME_SECONDS) || 30;
 const players = {};
 const adminSessions = {};
 
@@ -140,7 +184,9 @@ async function initDatabase() {
   }
 
   try {
-    console.log("🔄 Подключение к БД... (может занять до 60с при «пробуждении» Render)");
+    console.log(
+      "🔄 Подключение к БД... (может занять до 60с при «пробуждении» Render)",
+    );
     await pool.query("SELECT NOW()");
     console.log("✅ БД подключена");
 
@@ -165,6 +211,21 @@ async function initDatabase() {
         order_answer JSONB
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS quiz_results (
+        id SERIAL PRIMARY KEY,
+        quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+        player_name VARCHAR(255) NOT NULL,
+        score NUMERIC(12, 6) NOT NULL,
+        total_questions INTEGER NOT NULL,
+        answered_count INTEGER NOT NULL,
+        percentage SMALLINT,
+        finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_quiz_results_quiz_id ON quiz_results(quiz_id)`,
+    );
     console.log("База данных подключена и готова.");
 
     // Загрузка викторин из БД
@@ -173,12 +234,16 @@ async function initDatabase() {
     console.error("❌ Ошибка подключения к БД:", err.message);
     console.error("   Код ошибки:", err.code || "нет кода");
     if (err.message.includes("timeout")) {
-      console.error("   ⏱  Таймаут — Render БД «спит». Подождите 30-60с и перезапустите сервер.");
+      console.error(
+        "   ⏱  Таймаут — Render БД «спит». Подождите 30-60с и перезапустите сервер.",
+      );
       console.error("   💡 Или проверьте DATABASE_URL в .env файле.");
     } else if (err.message.includes("password")) {
       console.error("   🔑 Неверный логин или пароль. Проверьте DATABASE_URL.");
     } else if (err.message.includes("does not exist")) {
-      console.error("   🗄  База данных не существует. Проверьте настройки на Render.");
+      console.error(
+        "   🗄  База данных не существует. Проверьте настройки на Render.",
+      );
     }
     console.log("⚠️ Работа в режиме RAM (без подключения к БД)");
   }
@@ -285,6 +350,88 @@ function shuffleArray(array) {
   return shuffled;
 }
 
+/**
+ * Сохранить итог прохождения викторины (только для викторин из БД).
+ */
+async function saveQuizResultToDb(quiz, player, payload) {
+  if (!pool || !quiz?.dbId) return;
+  try {
+    await pool.query(
+      `INSERT INTO quiz_results
+        (quiz_id, player_name, score, total_questions, answered_count, percentage)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        quiz.dbId,
+        player.name,
+        payload.score,
+        payload.totalQuestions,
+        payload.answeredCount,
+        payload.percentage,
+      ],
+    );
+  } catch (err) {
+    console.error("Ошибка сохранения результата квиза в БД:", err.message);
+  }
+}
+
+/**
+ * Найти отключённого игрока по имени
+ * @returns {[string, object]|undefined}
+ */
+function findDisconnectedPlayerByName(name) {
+  return Object.entries(players).find(
+    ([id, p]) => p.name === name && p.disconnected,
+  );
+}
+
+/**
+ * Отправить восстановленному игроку его текущее состояние
+ */
+function sendRestoredPlayerState(socketId, player, quizId, quiz) {
+  if (!quizId || !quiz) return;
+
+  if (player.currentQuestion) {
+    // Игрок был на вопросе — отправляем его обратно
+    const question = quiz.questions[player.currentQuestion.originalIndex];
+    const timeLimit = question.timeLimit || QUESTION_TIME;
+    let timeLeft = timeLimit;
+    if (player.questionStartTime) {
+      const elapsed = (Date.now() - player.questionStartTime) / 1000;
+      timeLeft = Math.max(0, Math.ceil(timeLimit - elapsed));
+    }
+    io.to(socketId).emit("new-question", {
+      questionIndex: player.currentQuestion.questionNumber,
+      totalQuestions: quiz.questions.length,
+      text: question.text,
+      type: question.type,
+      options: question.options,
+      correct: question.correct,
+      image: question.image,
+      timeLeft: timeLeft,
+    });
+  } else if (player.answeredQuestions.length > 0) {
+    // Игрок уже ответил на вопросы
+    if (player.answeredQuestions.length >= quiz.questions.length) {
+      io.to(socketId).emit("player-quiz-ended", {
+        score: player.score,
+        totalQuestions: quiz.questions.length,
+        answeredCount: player.answeredQuestions.length,
+        percentage: Math.round(
+          (player.score / quiz.questions.length) * 100,
+        ),
+      });
+    }
+    // Иначе — игрок на экране ожидания, ничего не отправляем
+  } else if (quizStarted) {
+    // Игрок был в игре но ещё не получил вопрос
+    io.to(socketId).emit("quiz-ready", {
+      quizId,
+      name: quiz.name,
+      questionsCount: quiz.questions.length,
+    });
+  }
+}
+
 io.on("connection", (socket) => {
   console.log("Подключился клиент:", socket.id);
 
@@ -376,10 +523,29 @@ io.on("connection", (socket) => {
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz) return;
 
+    // Проверка: если работаем с БД, но у викторины нет dbId — ошибка
+    if (pool && !quiz.dbId) {
+      console.error("Ошибка: викторина создана в RAM режиме, но БД подключена");
+      socket.emit("question-error", {
+        error:
+          "Викторина не сохранена в БД. Пересоздайте её после подключения к БД.",
+      });
+      return;
+    }
+
     // Sanitize text and options
-    const sanitizedText = sanitizeInput(data.text, 2000);
+    const sanitizedText = sanitizeInput(data.text || "", 2000);
     const sanitizedOptions = Array.isArray(data.options)
-      ? data.options.map(opt => typeof opt === 'string' ? sanitizeInput(opt, 500) : opt)
+      ? data.options.map((opt) => {
+          // Поддержка как строк так и объектов {text, image}
+          if (typeof opt === "object" && opt !== null) {
+            return {
+              text: sanitizeInput(opt.text || "", 500),
+              image: typeof opt.image === "string" ? opt.image : null,
+            };
+          }
+          return typeof opt === "string" ? sanitizeInput(opt, 500) : opt;
+        })
       : data.options;
 
     const questionData = {
@@ -410,6 +576,10 @@ io.on("connection", (socket) => {
         questionData.orderIndex = orderIndex;
       } catch (err) {
         console.error("Ошибка добавления вопроса:", err.message);
+        socket.emit("question-error", {
+          error: "Ошибка сохранения в БД: " + err.message,
+        });
+        return;
       }
     }
 
@@ -466,9 +636,18 @@ io.on("connection", (socket) => {
     if (!quiz || !quiz.questions[data.questionIndex]) return;
 
     // Sanitize text and options
-    const sanitizedText = sanitizeInput(data.text, 2000);
+    const sanitizedText = sanitizeInput(data.text || "", 2000);
     const sanitizedOptions = Array.isArray(data.options)
-      ? data.options.map(opt => typeof opt === 'string' ? sanitizeInput(opt, 500) : opt)
+      ? data.options.map((opt) => {
+          // Поддержка как строк так и объектов {text, image}
+          if (typeof opt === "object" && opt !== null) {
+            return {
+              text: sanitizeInput(opt.text || "", 500),
+              image: typeof opt.image === "string" ? opt.image : null,
+            };
+          }
+          return typeof opt === "string" ? sanitizeInput(opt, 500) : opt;
+        })
       : data.options;
 
     const questionData = {
@@ -565,6 +744,24 @@ io.on("connection", (socket) => {
     console.log(`Выбрана викторина: ${quiz.name}`);
   });
 
+  // Остановка викторины
+  socket.on("stop-quiz", () => {
+    if (!adminSessions[socket.id]) return;
+
+    // Сбрасываем состояние
+    currentQuizId = null;
+    quizStarted = false;
+    quizFinished = false;
+
+    // Очищаем игроков
+    for (const id in players) {
+      delete players[id];
+    }
+
+    console.log("Викторина остановлена");
+    io.emit("quiz-stopped");
+  });
+
   // Перезапуск викторины (даже если есть игроки)
   socket.on("restart-quiz", () => {
     if (!adminSessions[socket.id]) return;
@@ -574,6 +771,7 @@ io.on("connection", (socket) => {
     if (!quiz) return;
 
     quizStarted = false;
+    quizFinished = false;
 
     // Сброс всех игроков
     for (const id in players) {
@@ -589,14 +787,145 @@ io.on("connection", (socket) => {
     console.log(`Викторина перезапущена: ${quiz.name}`);
   });
 
-  // NOTE: `quiz-stopped` event is listened to by players (index.html:1605) but never emitted.
-  // TODO: Implement admin "stop quiz" functionality and emit this event when needed.
-  
   socket.on("get-quiz-questions", (quizId) => {
     if (!adminSessions[socket.id]) return;
     const quiz = quizzes.find((q) => q.id === quizId);
     if (!quiz) return;
     socket.emit("quiz-questions", { quizId, questions: quiz.questions });
+  });
+
+  // Получить текущее состояние игры
+  socket.on("get-game-state", () => {
+    if (!adminSessions[socket.id]) return;
+
+    let gameState = {
+      currentQuizId: currentQuizId,
+      quizStarted: quizStarted,
+      quizFinished: quizFinished,
+      quizName: null,
+      questionsCount: 0,
+    };
+
+    if (currentQuizId) {
+      const quiz = quizzes.find((q) => q.id === currentQuizId);
+      if (quiz) {
+        gameState.quizName = quiz.name;
+        gameState.questionsCount = quiz.questions.length;
+      }
+    }
+
+    socket.emit("game-state", gameState);
+
+    // Отправляем текущий лидерборд и количество игроков онлайн
+    const leaderboard = getLeaderboard();
+    socket.emit("update-leaderboard", leaderboard);
+
+    // Считаем только онлайн игроков (не отключившихся)
+    const onlineCount = Object.values(players).filter(
+      (p) => !p.disconnected,
+    ).length;
+    socket.emit("players-count", { count: onlineCount });
+  });
+
+  // История результатов (таблица quiz_results)
+  socket.on("get-quiz-results", async (payload) => {
+    if (!checkSocketRateLimit(socket)) return;
+    if (!adminSessions[socket.id]) return;
+
+    const raw =
+      payload != null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {};
+    const quizId =
+      raw.quizId !== undefined && raw.quizId !== null
+        ? String(raw.quizId)
+        : typeof payload === "string"
+          ? payload
+          : "";
+
+    if (!pool) {
+      socket.emit("quiz-results", {
+        error:
+          "База данных не подключена — результаты не сохраняются и не отображаются.",
+        results: [],
+        mode: quizId ? "quiz" : "all",
+        quizId: quizId || null,
+      });
+      return;
+    }
+
+    try {
+      if (!quizId) {
+        const res = await pool.query(
+          `SELECT r.id, r.quiz_id, q.name AS quiz_name, r.player_name, r.score,
+                  r.total_questions, r.answered_count, r.percentage, r.finished_at
+           FROM quiz_results r
+           INNER JOIN quizzes q ON q.id = r.quiz_id
+           ORDER BY r.finished_at DESC
+           LIMIT 200`,
+        );
+        socket.emit("quiz-results", {
+          results: res.rows.map((row) => ({
+            id: row.id,
+            quizId: row.quiz_id,
+            quizName: row.quiz_name,
+            playerName: row.player_name,
+            score: Number(row.score),
+            totalQuestions: row.total_questions,
+            answeredCount: row.answered_count,
+            percentage: row.percentage,
+            finishedAt: row.finished_at,
+          })),
+          mode: "all",
+          quizId: null,
+        });
+        return;
+      }
+
+      const quiz = quizzes.find((q) => q.id === quizId);
+      if (!quiz || !quiz.dbId) {
+        socket.emit("quiz-results", {
+          error: quiz
+            ? "Для этой викторины нет истории в базе (создана без БД)."
+            : "Викторина не найдена.",
+          results: [],
+          mode: "quiz",
+          quizId,
+        });
+        return;
+      }
+
+      const res = await pool.query(
+        `SELECT r.id, r.player_name, r.score, r.total_questions, r.answered_count, r.percentage, r.finished_at
+         FROM quiz_results r
+         WHERE r.quiz_id = $1
+         ORDER BY r.finished_at DESC
+         LIMIT 500`,
+        [quiz.dbId],
+      );
+      socket.emit("quiz-results", {
+        results: res.rows.map((row) => ({
+          id: row.id,
+          playerName: row.player_name,
+          score: Number(row.score),
+          totalQuestions: row.total_questions,
+          answeredCount: row.answered_count,
+          percentage: row.percentage,
+          finishedAt: row.finished_at,
+        })),
+        mode: "quiz",
+        quizId,
+        quizName: quiz.name,
+      });
+    } catch (err) {
+      console.error("Ошибка загрузки результатов:", err.message);
+      socket.emit("quiz-results", {
+        error: "Не удалось загрузить результаты: " + err.message,
+        results: [],
+        mode: quizId ? "quiz" : "all",
+        quizId: quizId || null,
+      });
+    }
   });
 
   // Старт викторины
@@ -608,6 +937,7 @@ io.on("connection", (socket) => {
     if (!quiz) return;
 
     quizStarted = true;
+    quizFinished = false;
 
     for (const id in players) {
       sendNextQuestionToPlayer(id, quiz);
@@ -620,69 +950,85 @@ io.on("connection", (socket) => {
 
   socket.on("register", (data) => {
     if (!checkSocketRateLimit(socket)) return;
-    if (quizStarted) {
-      socket.emit("quiz-already-started");
-      return;
-    }
 
     const rawName = typeof data === "string" ? data : data.name;
     const name = sanitizeInput(rawName, 50);
     const savedId = typeof data === "object" ? data.savedId : null;
 
     if (!name) {
-      socket.emit("registered", { playerId: null, name: "", error: "Имя не может быть пустым" });
-      return;
-    }
-
-    // Если есть сохранённый ID, пытаемся восстановить игрока
-    if (savedId && players[savedId]) {
-      const player = players[savedId];
-      // Перепривязываем к новому сокету
-      players[socket.id] = player;
-      delete players[savedId];
-
-      console.log(
-        `Игрок восстановлен: ${player.name} (${savedId} → ${socket.id})`,
-      );
       socket.emit("registered", {
-        playerId: socket.id,
-        name: player.name,
-        restored: true,
+        playerId: null,
+        name: "",
+        error: "Имя не может быть пустым",
       });
-
-      if (currentQuizId && quizStarted && player.currentQuestion) {
-        const quiz = quizzes.find((q) => q.id === currentQuizId);
-        if (quiz) {
-          const question = quiz.questions[player.currentQuestion.originalIndex];
-          socket.emit("new-question", {
-            questionIndex: player.currentQuestion.questionNumber,
-            totalQuestions: quiz.questions.length,
-            text: question.text,
-            type: question.type,
-            options: question.options,
-            correct: question.correct,
-            image: question.image,
-            timeLeft: QUESTION_TIME,
-          });
-        }
-      }
-      broadcastLeaderboard();
       return;
     }
 
-    // Проверяем, есть ли игрок с таким именем (переподключение)
-    const existingPlayer = Object.entries(players).find(
-      ([id, p]) => p.name === name && !p.answeredQuestions.length,
-    );
+    // Если есть сохранённый ID, пытаемся восстановить игрока (даже если викторина запущена)
+    if (savedId) {
+      if (players[savedId]) {
+        // Игрок найден по старому socket.id
+        const player = players[savedId];
+        players[socket.id] = player;
+        player.disconnected = false;
+        delete players[savedId];
+
+        console.log(
+          `[Session] Игрок восстановлен по ID: ${player.name} (${savedId} → ${socket.id})`,
+        );
+        socket.emit("registered", {
+          playerId: socket.id,
+          name: player.name,
+          restored: true,
+        });
+
+        const quiz = quizzes.find((q) => q.id === currentQuizId);
+        sendRestoredPlayerState(socket.id, player, currentQuizId, quiz);
+        broadcastLeaderboard();
+        return;
+      }
+
+      // Fallback: ищем игрока по имени среди отключённых
+      const disconnectedPlayer = findDisconnectedPlayerByName(name);
+      if (disconnectedPlayer) {
+        const [oldId, player] = disconnectedPlayer;
+        players[socket.id] = player;
+        player.disconnected = false;
+        delete players[oldId];
+
+        console.log(
+          `[Session] Игрок восстановлен по имени: ${player.name} (${oldId} → ${socket.id})`,
+        );
+        socket.emit("registered", {
+          playerId: socket.id,
+          name: player.name,
+          restored: true,
+        });
+
+        const quiz = quizzes.find((q) => q.id === currentQuizId);
+        sendRestoredPlayerState(socket.id, player, currentQuizId, quiz);
+        broadcastLeaderboard();
+        return;
+      }
+
+      // Игрок не найден — сессия устарела
+      console.log(`[Session] Сессия игрока не найдена: ${savedId}, имя: ${name}`);
+      socket.emit("session-not-found");
+      return;
+    }
+
+    // Проверяем, есть ли игрок с таким именем (переподключение после отключения без savedId)
+    const existingPlayer = findDisconnectedPlayerByName(name);
 
     if (existingPlayer) {
       const [oldId, player] = existingPlayer;
       // Перепривязываем к новому сокету
       players[socket.id] = player;
+      player.disconnected = false;
       delete players[oldId];
 
       console.log(
-        `Игрок переподключён: ${player.name} (${oldId} → ${socket.id})`,
+        `[Session] Игрок переподключён по имени: ${player.name} (${oldId} → ${socket.id})`,
       );
       socket.emit("registered", {
         playerId: socket.id,
@@ -690,23 +1036,15 @@ io.on("connection", (socket) => {
         restored: true,
       });
 
-      if (currentQuizId && quizStarted && player.currentQuestion) {
-        const quiz = quizzes.find((q) => q.id === currentQuizId);
-        if (quiz) {
-          const question = quiz.questions[player.currentQuestion.originalIndex];
-          socket.emit("new-question", {
-            questionIndex: player.currentQuestion.questionNumber,
-            totalQuestions: quiz.questions.length,
-            text: question.text,
-            type: question.type,
-            options: question.options,
-            correct: question.correct,
-            image: question.image,
-            timeLeft: QUESTION_TIME,
-          });
-        }
-      }
+      const quiz = quizzes.find((q) => q.id === currentQuizId);
+      sendRestoredPlayerState(socket.id, player, currentQuizId, quiz);
       broadcastLeaderboard();
+      return;
+    }
+
+    // Для новых игроков — блокировка если викторина запущена
+    if (quizStarted) {
+      socket.emit("quiz-already-started");
       return;
     }
 
@@ -718,6 +1056,7 @@ io.on("connection", (socket) => {
       currentQuestion: null,
       answeredQuestions: [],
       questionStartTime: null,
+      quizCompletionHandled: false,
     };
     console.log(`Игрок зарегистрирован: ${name}`);
     socket.emit("registered", { playerId: socket.id, name, restored: false });
@@ -745,45 +1084,79 @@ io.on("connection", (socket) => {
 
     const question = quiz.questions[player.currentQuestion.originalIndex];
 
-    // Проверка ответа в зависимости от типа
-    let isCorrect = false;
+    // Подсчёт баллов: максимум 1 балл за вопрос
+    let pointsEarned = 0;
 
     if (typeof answerData === "object" && answerData !== null) {
       // Ordering или Matching или Text
       if (answerData.type === "ordering") {
-        // Сравниваем порядок
-        isCorrect =
+        // Сравниваем порядок — полностью правильно или нет
+        const isCorrect =
           JSON.stringify(answerData.answer) ===
           JSON.stringify(question.correct);
+        pointsEarned = isCorrect ? 1 : 0;
       } else if (answerData.type === "matching") {
-        isCorrect = answerData.correct;
+        // Matching — серверная проверка реальных пар
+        const pairs = answerData.pairs; // [{questionIndex, answerIndex}, ...]
+        if (!Array.isArray(pairs)) {
+          pointsEarned = 0;
+        } else {
+          const isFullyCorrect =
+            pairs.length === question.correct.length &&
+            pairs.every((p) => {
+              // Проверяем что questionIndex === answerIndex (правильная пара)
+              return p.questionIndex === p.answerIndex;
+            });
+          pointsEarned = isFullyCorrect ? 1 : 0;
+        }
       } else if (answerData.type === "text") {
-        // Текстовый ответ - сравнение без учёта регистра, санитизируем
-        const userAnswer = sanitizeInput(answerData.answer, 500).toLowerCase().trim();
-        const correctAnswer = question.options[0] || "";
-        isCorrect =
-          userAnswer ===
-          correctAnswer.toLowerCase().trim();
+        // Текстовый ответ — полностью правильно или нет
+        const userAnswer = sanitizeInput(answerData.answer, 500)
+          .toLowerCase()
+          .trim();
+        // Поддержка как строк так и объектов {text, image}
+        const correctOption = question.options[0];
+        const correctAnswer =
+          typeof correctOption === "object"
+            ? correctOption.text || ""
+            : correctOption || "";
+        pointsEarned =
+          userAnswer === correctAnswer.toLowerCase().trim() ? 1 : 0;
       }
     } else if (Array.isArray(answerData)) {
-      // Множественный выбор
-      isCorrect =
-        answerData.every((a) => question.correct.includes(a)) &&
-        answerData.length === question.correct.length;
+      // Множественный выбор — пропорционально правильным ответам
+      const correctAnswers = question.correct || [];
+      const userAnswers = answerData;
+
+      if (correctAnswers.length === 0) {
+        pointsEarned = 0;
+      } else {
+        // Считаем сколько правильных ответов выбрал пользователь
+        const correctSelected = userAnswers.filter((a) =>
+          correctAnswers.includes(a),
+        ).length;
+        // Считаем сколько неправильных ответов выбрал пользователь (штраф)
+        const incorrectSelected = userAnswers.filter(
+          (a) => !correctAnswers.includes(a),
+        ).length;
+        // Пропорциональный балл: (правильные / всего_правильных) - штраф за неправильные
+        // Но не меньше 0
+        const rawPoints =
+          correctSelected / correctAnswers.length -
+          incorrectSelected / (question.options?.length || 1);
+        pointsEarned = Math.max(0, Math.min(1, rawPoints));
+      }
     } else {
-      // Одиночный выбор
-      isCorrect = question.correct.includes(answerData);
+      // Одиночный выбор — полностью правильно или нет
+      pointsEarned = question.correct.includes(answerData) ? 1 : 0;
     }
 
-    if (isCorrect) {
-      const timeSpent = player.questionStartTime
-        ? (Date.now() - player.questionStartTime) / 1000
-        : QUESTION_TIME;
-      const timeLimit = question.timeLimit || QUESTION_TIME;
-      const bonus = Math.max(0, Math.floor((timeLimit - timeSpent) / 3));
-      player.score += 10 + bonus;
+    // Начисляем баллы (максимум 1 за вопрос)
+    player.score += pointsEarned;
+
+    if (pointsEarned > 0) {
       console.log(
-        `Игрок ${player.name} ответил правильно! +${10 + bonus} баллов`,
+        `Игрок ${player.name} ответил правильно! +${pointsEarned.toFixed(2)} баллов`,
       );
     }
 
@@ -823,8 +1196,20 @@ io.on("connection", (socket) => {
     const player = players[socket.id];
     if (player) {
       console.log(`Игрок отключился: ${player.name}`);
-      delete players[socket.id];
+      // Помечаем как отключённого, но НЕ удаляем — чтобы сохранить в рейтинге
+      // и дать время на восстановление сессии
+      player.disconnected = true;
+      player.lastSocketId = socket.id;
       broadcastLeaderboard();
+
+      // Автоматически удаляем игрока через 60 секунд если не восстановился
+      setTimeout(() => {
+        if (player.disconnected && players[socket.id]) {
+          delete players[socket.id];
+          console.log(`Игрок удалён после таймаута: ${player.name}`);
+          broadcastLeaderboard();
+        }
+      }, 60_000);
     }
     if (adminSessions[socket.id]) {
       delete adminSessions[socket.id];
@@ -842,6 +1227,7 @@ function initPlayerQuestions(playerId, quiz) {
   players[playerId].currentQuestion = null;
   players[playerId].score = 0;
   players[playerId].isProcessingAnswer = false;
+  players[playerId].quizCompletionHandled = false;
 }
 
 function sendNextQuestionToPlayer(playerId, quiz) {
@@ -853,17 +1239,25 @@ function sendNextQuestionToPlayer(playerId, quiz) {
   );
 
   if (nextIndex === undefined) {
+    if (player.quizCompletionHandled) return;
+    player.quizCompletionHandled = true;
+
     const playerScore = player.score;
     const totalQuestions = quiz.questions.length;
     const answeredCount = player.answeredQuestions.length;
-    const percentage = Math.round((answeredCount / totalQuestions) * 100);
+    // Процент от набранных баллов к максимальным
+    const percentage =
+      totalQuestions > 0 ? Math.round((playerScore / totalQuestions) * 100) : 0;
 
-    io.to(playerId).emit("player-quiz-ended", {
+    const endPayload = {
       score: playerScore,
       totalQuestions,
       answeredCount,
       percentage,
-    });
+    };
+    void saveQuizResultToDb(quiz, player, endPayload);
+
+    io.to(playerId).emit("player-quiz-ended", endPayload);
 
     // Проверка: все ли игроки завершили
     checkAllPlayersFinished(quiz);
@@ -898,10 +1292,7 @@ function getLeaderboard() {
       totalQuestions: data.questionsQueue.length,
       percentage:
         data.questionsQueue.length > 0
-          ? Math.round(
-              (data.answeredQuestions.length / data.questionsQueue.length) *
-                100,
-            )
+          ? Math.round((data.score / data.questionsQueue.length) * 100)
           : 0,
     }))
     .sort((a, b) => b.score - a.score);
@@ -913,10 +1304,12 @@ function checkAllPlayersFinished(quiz) {
   if (activePlayers.length === 0) return;
 
   const allFinished = activePlayers.every(
-    (p) => p.answeredQuestions.length >= quiz.questions.length,
+    (p) =>
+      p.disconnected || p.answeredQuestions.length >= quiz.questions.length,
   );
 
   if (allFinished) {
+    quizFinished = true;
     // Отправляем админу уведомление и результаты
     const leaderboard = getLeaderboard();
     io.emit("all-players-finished", {
@@ -931,8 +1324,11 @@ function checkAllPlayersFinished(quiz) {
 function broadcastLeaderboard() {
   const leaderboard = getLeaderboard();
   io.emit("update-leaderboard", leaderboard);
-  // Также отправляем количество игроков
-  io.emit("players-count", { count: Object.keys(players).length });
+  // Считаем только онлайн игроков (не отключившихся)
+  const onlineCount = Object.values(players).filter(
+    (p) => !p.disconnected,
+  ).length;
+  io.emit("players-count", { count: onlineCount });
 }
 
 // Инициализация и запуск
