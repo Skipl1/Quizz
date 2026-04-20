@@ -71,15 +71,6 @@
           >
             Результаты
           </button>
-          <button
-            type="button"
-            class="tab hidden"
-            id="leaderboard-tab-btn"
-            data-tab="leaderboard"
-            onclick="showTab('leaderboard', event)"
-          >
-            Рейтинг
-          </button>
         </div>
 
         <!-- Викторины -->
@@ -1050,6 +1041,13 @@
             <p class="results-intro">
               Здесь отображаются завершённые прохождения
             </p>
+            <div
+              id="results-finished-banner"
+              class="results-finished-banner hidden"
+              role="status"
+            >
+              Викторина завершена — все игроки прошли её
+            </div>
             <p
               id="results-error"
               class="results-error hidden"
@@ -1141,16 +1139,7 @@
           </div>
         </div>
 
-        <!-- Рейтинг -->
-        <div id="leaderboard-tab" class="screen hidden">
-          <div class="card">
-            <h2>Рейтинг игроков</h2>
-            <div class="players-count" id="players-count">Игроков: 0</div>
-            <div id="leaderboard">
-              <div class="empty-state">Пока нет игроков</div>
-            </div>
-          </div>
-        </div>
+        <!-- Рейтинг (удалено) -->
       </div>
     </div>
 

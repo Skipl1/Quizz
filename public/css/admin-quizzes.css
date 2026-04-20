@@ -300,6 +300,16 @@
 
 /* Старый filter UI удалён (используем список викторин) */
 
+.results-finished-banner {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: var(--success);
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  font-weight: 700;
+  margin: 0 0 1rem;
+}
+
 .results-error {
   color: var(--danger);
   font-size: 0.9rem;
@@ -315,12 +325,14 @@
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(15, 23, 42, 0.25);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .admin-results-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  min-width: 720px;
 }
 
 .admin-results-table th,
@@ -335,6 +347,14 @@
   color: var(--text-muted);
   font-weight: 600;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  backdrop-filter: blur(8px);
+}
+
+.admin-results-table tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.18);
 }
 
 .admin-results-table tbody tr:hover {
@@ -343,4 +363,46 @@
 
 .admin-results-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.admin-results-table .col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.admin-results-table .col-rank {
+  width: 56px;
+  text-align: center;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: var(--accent);
+}
+
+.admin-results-table tr.rank-top .rank-badge {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: var(--success);
+}
+
+.admin-results-table tr.rank-1 {
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.75);
+}
+.admin-results-table tr.rank-2 {
+  box-shadow: inset 3px 0 0 rgba(148, 163, 184, 0.75);
+}
+.admin-results-table tr.rank-3 {
+  box-shadow: inset 3px 0 0 rgba(234, 88, 12, 0.65);
 }

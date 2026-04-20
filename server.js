@@ -912,7 +912,7 @@ io.on("connection", (socket) => {
         `SELECT r.id, r.player_name, r.score, r.total_questions, r.answered_count, r.percentage, r.finished_at
          FROM quiz_results r
          WHERE r.quiz_id = $1
-         ORDER BY r.finished_at DESC
+         ORDER BY r.score DESC, r.percentage DESC NULLS LAST, r.finished_at DESC
          LIMIT 500`,
         [quizDbId],
       );

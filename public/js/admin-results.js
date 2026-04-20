@@ -191,7 +191,17 @@ function renderQuizResultsPayload(data) {
     errEl.textContent = data.error || "";
   }
 
-  const rows = data.results || [];
+  const rows = (data.results || []).slice().sort((a, b) => {
+    const as = typeof a.score === "number" && !Number.isNaN(a.score) ? a.score : 0;
+    const bs = typeof b.score === "number" && !Number.isNaN(b.score) ? b.score : 0;
+    if (bs !== as) return bs - as;
+    const ap = typeof a.percentage === "number" && !Number.isNaN(a.percentage) ? a.percentage : 0;
+    const bp = typeof b.percentage === "number" && !Number.isNaN(b.percentage) ? b.percentage : 0;
+    if (bp !== ap) return bp - ap;
+    const at = a.finishedAt ? new Date(a.finishedAt).getTime() : 0;
+    const bt = b.finishedAt ? new Date(b.finishedAt).getTime() : 0;
+    return bt - at;
+  });
   if (rows.length === 0) {
     wrap.innerHTML =
       '<div class="empty-state">Пока нет сохранённых прохождений для этого фильтра.</div>';
@@ -202,23 +212,29 @@ function renderQuizResultsPayload(data) {
     <table class="admin-results-table">
       <thead>
         <tr>
+          <th class="col-rank">#</th>
           <th>Игрок</th>
-          <th>Баллы</th>
-          <th>Вопросов</th>
-          <th>Отвечено</th>
-          <th>%</th>
+          <th class="col-num">Баллы</th>
+          <th class="col-num">Вопросов</th>
+          <th class="col-num">Отвечено</th>
+          <th class="col-num">%</th>
           <th>Дата</th>
         </tr>
       </thead>
       <tbody>
         ${rows
-          .map((r) => {
-            return `<tr>
+          .map((r, idx) => {
+            const rank = idx + 1;
+            const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+            const rankLabel = medal || String(rank);
+            const trClass = rank <= 3 ? ` class="rank-top rank-${rank}"` : "";
+            return `<tr${trClass}>
+            <td class="col-rank"><span class="rank-badge">${escapeHtml(rankLabel)}</span></td>
             <td>${escapeHtml(r.playerName || "")}</td>
-            <td>${escapeHtml(String(formatScore(r.score)))}</td>
-            <td>${r.totalQuestions ?? "—"}</td>
-            <td>${r.answeredCount ?? "—"}</td>
-            <td>${r.percentage != null ? `${r.percentage}%` : "—"}</td>
+            <td class="col-num">${escapeHtml(String(formatScore(r.score)))}</td>
+            <td class="col-num">${r.totalQuestions ?? "—"}</td>
+            <td class="col-num">${r.answeredCount ?? "—"}</td>
+            <td class="col-num">${r.percentage != null ? `${r.percentage}%` : "—"}</td>
             <td>${escapeHtml(formatResultsDate(r.finishedAt))}</td>
           </tr>`;
           })
@@ -342,6 +358,23 @@ socket.on("results-quizzes", (data) => {
   }
   window.__lastResultsQuizzesList = (data && data.quizzes) || [];
   renderCompletedQuizzes(window.__lastResultsQuizzesList);
+
+  // Авто-раскрытие викторины после завершения игры
+  const pendingId = window.__pendingAutoOpenResultsQuizDbId;
+  if (pendingId != null) {
+    const found = window.__lastResultsQuizzesList.find(
+      (q) => Number(q.quizDbId) === Number(pendingId),
+    );
+    if (found) {
+      const pendingName =
+        typeof window.__pendingAutoOpenResultsQuizName === "string"
+          ? window.__pendingAutoOpenResultsQuizName
+          : "";
+      window.__pendingAutoOpenResultsQuizDbId = null;
+      window.__pendingAutoOpenResultsQuizName = null;
+      selectResultsQuiz(Number(found.quizDbId), pendingName || found.quizName || "");
+    }
+  }
 });
 
 socket.on("quiz-results-deleted", (data) => {

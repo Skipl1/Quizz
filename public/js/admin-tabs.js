@@ -4,7 +4,7 @@
 
 /**
  * Переключает видимую вкладку в админ-панели.
- * @param {string} tabName - Имя вкладки (quizzes, play, results, leaderboard)
+ * @param {string} tabName - Имя вкладки (quizzes, play, results)
  * @param {MouseEvent} [ev] - событие клика (если вызов из onclick)
  */
 function showTab(tabName, ev) {

@@ -325,6 +325,9 @@ socket.on("quiz-ready", (data) => {
 });
 
 socket.on("quiz-stopped", () => {
+  const finishedBanner = document.getElementById("results-finished-banner");
+  if (finishedBanner) finishedBanner.classList.add("hidden");
+
   // Сбрасываем состояние игры
   currentQuizId = null;
   const qrBtn = document.getElementById("play-qr-btn");
@@ -340,10 +343,6 @@ socket.on("quiz-stopped", () => {
   document
     .getElementById("game-info-card")
     .classList.remove("quiz-running");
-
-  // Скрываем вкладку рейтинга
-  document.getElementById("leaderboard-tab-btn").classList.add("hidden");
-  document.getElementById("leaderboard-tab").classList.add("hidden");
 
   // Переключаемся на вкладку "Викторины"
   document
@@ -387,93 +386,46 @@ socket.on("game-state", (data) => {
         .classList.remove("quiz-running");
     }
 
-    // Если викторина завершена - показываем вкладку "Рейтинг"
-    if (data.quizFinished) {
-      document
-        .getElementById("leaderboard-tab-btn")
-        .classList.remove("hidden");
-      document
-        .getElementById("leaderboard-tab")
-        .classList.remove("hidden");
+  }
+});
+
+// Все игроки завершили викторину — переключаем админа к результатам
+socket.on("all-players-finished", () => {
+  if (typeof showTab === "function") {
+    showTab("results");
+  }
+  const finishedBanner = document.getElementById("results-finished-banner");
+  if (finishedBanner) {
+    finishedBanner.classList.remove("hidden");
+    // Автоскрытие, чтобы не мешало постоянно
+    clearTimeout(window.__resultsFinishedBannerTimeout);
+    window.__resultsFinishedBannerTimeout = setTimeout(() => {
+      const el = document.getElementById("results-finished-banner");
+      if (el) el.classList.add("hidden");
+    }, 12_000);
+  }
+  // Попробуем автоматически раскрыть результаты текущей викторины (если она из БД)
+  const quizId = typeof currentQuizId === "string" ? currentQuizId : "";
+  if (quizId.startsWith("db-")) {
+    const dbId = Number(quizId.slice(3));
+    if (Number.isFinite(dbId) && dbId > 0) {
+      const nameEl = document.getElementById("current-quiz-name");
+      const nameText = nameEl ? String(nameEl.textContent || "") : "";
+      // current-quiz-name выглядит как "Название (N вопросов)" — отрежем хвост
+      const cleanedName = nameText.replace(/\s*\(\s*\d+\s+вопрос.*\)\s*$/i, "").trim();
+      window.__pendingAutoOpenResultsQuizDbId = dbId;
+      window.__pendingAutoOpenResultsQuizName = cleanedName;
     }
   }
-});
-
-// ---------- Лидерборд ----------
-
-socket.on("update-leaderboard", (leaderboard) => {
-  document.getElementById("players-count").textContent =
-    `Игроков: ${leaderboard.length}`;
-
-  const container = document.getElementById("leaderboard");
-  if (leaderboard.length === 0) {
-    container.innerHTML =
-      '<div class="empty-state">Пока нет игроков</div>';
-    return;
+  if (typeof loadResultsOverview === "function") {
+    loadResultsOverview();
   }
-
-  container.innerHTML = leaderboard
-    .map(
-      (p, i) => `
-    <div class="leaderboard-item">
-      <span class="rank">#${i + 1}</span>
-      <span class="name">${escapeHtml(p.name)}</span>
-      <span class="score">${p.score} бал.</span>
-      <span style="color:var(--text-muted);font-size:0.8rem;margin-left:0.75rem;">${p.percentage}%</span>
-    </div>
-  `,
-    )
-    .join("");
-});
-
-socket.on("all-players-finished", (data) => {
-  // Показываем вкладку "Рейтинг"
-  document
-    .getElementById("leaderboard-tab-btn")
-    .classList.remove("hidden");
-  document.getElementById("leaderboard-tab").classList.remove("hidden");
-
-  // Переключаемся на вкладку рейтинга
-  document
-    .querySelectorAll(".tab")
-    .forEach((t) => t.classList.remove("active"));
-  const lbTab = document.getElementById("leaderboard-tab-btn");
-  if (lbTab) lbTab.classList.add("active");
-  document
-    .querySelectorAll(".screen")
-    .forEach((s) => s.classList.remove("active"));
-  document.getElementById("leaderboard-tab").classList.add("active");
-
-  const container = document.getElementById("leaderboard");
-  container.innerHTML = `
-    <div style="background:rgba(16,185,129,0.15);color:var(--success);padding:1.25rem;border-radius:12px;margin-bottom:1rem;">
-      <strong>Все игроки завершили викторину!</strong>
-    </div>
-    ${data.leaderboard
-      .map(
-        (p, i) => `
-      <div class="leaderboard-item">
-        <span class="rank">#${i + 1}</span>
-        <span class="name">${escapeHtml(p.name)}</span>
-        <div style="display:flex;gap:0.75rem;align-items:center;">
-          <span class="score">${p.score} бал.</span>
-          <span style="background:var(--accent);color:white;padding:0.25rem 0.75rem;border-radius:8px;font-size:0.8rem;">${p.percentage}%</span>
-        </div>
-      </div>
-    `,
-      )
-      .join("")}
-  `;
 });
 
 socket.on("players-count", (data) => {
   const playersOnlineEl = document.getElementById("players-online");
   if (playersOnlineEl) {
     playersOnlineEl.textContent = data.count;
-  }
-  const playersCountEl = document.getElementById("players-count");
-  if (playersCountEl) {
-    playersCountEl.textContent = `Игроков: ${data.count}`;
   }
   console.log(`Игроков онлайн: ${data.count}`);
 });
