@@ -21,8 +21,12 @@ function showTab(tabName, ev) {
   if (target) target.classList.add("active");
   const screen = document.getElementById(tabName + "-tab");
   if (screen) screen.classList.add("active");
-  if (tabName === "results" && typeof loadQuizResults === "function") {
-    loadQuizResults();
+  if (tabName === "results") {
+    if (typeof loadResultsOverview === "function") {
+      loadResultsOverview();
+    } else if (typeof loadQuizResults === "function") {
+      loadQuizResults();
+    }
   }
 }
 

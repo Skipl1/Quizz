@@ -313,6 +313,8 @@ socket.on("quiz-questions", (data) => {
 socket.on("quiz-ready", (data) => {
   document.getElementById("game-not-started").classList.add("hidden");
   document.getElementById("game-active").classList.remove("hidden");
+  const qrBtn = document.getElementById("play-qr-btn");
+  if (qrBtn) qrBtn.classList.remove("hidden");
   document.getElementById("current-quiz-name").textContent =
     `${data.name} (${data.questionsCount} вопросов)`;
   document.getElementById("start-btn").disabled = false;
@@ -325,6 +327,8 @@ socket.on("quiz-ready", (data) => {
 socket.on("quiz-stopped", () => {
   // Сбрасываем состояние игры
   currentQuizId = null;
+  const qrBtn = document.getElementById("play-qr-btn");
+  if (qrBtn) qrBtn.classList.add("hidden");
 
   // Показываем список викторин
   document.getElementById("game-not-started").classList.remove("hidden");
@@ -358,6 +362,8 @@ socket.on("game-state", (data) => {
     currentQuizId = data.currentQuizId;
     document.getElementById("game-not-started").classList.add("hidden");
     document.getElementById("game-active").classList.remove("hidden");
+    const qrBtn = document.getElementById("play-qr-btn");
+    if (qrBtn) qrBtn.classList.remove("hidden");
     document.getElementById("current-quiz-name").textContent =
       `${data.quizName || "Викторина"} (${data.questionsCount} вопросов)`;
 

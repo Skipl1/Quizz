@@ -58,18 +58,18 @@
           <button
             type="button"
             class="tab"
-            data-tab="results"
-            onclick="showTab('results', event)"
-          >
-            Результаты
-          </button>
-          <button
-            type="button"
-            class="tab"
             data-tab="play"
             onclick="showTab('play', event)"
           >
             Играть
+          </button>
+          <button
+            type="button"
+            class="tab"
+            data-tab="results"
+            onclick="showTab('results', event)"
+          >
+            Результаты
           </button>
           <button
             type="button"
@@ -87,18 +87,6 @@
           <div class="card">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
               <h2 style="margin: 0;">Мои викторины</h2>
-              <button class="qr-card-btn" onclick="toggleQRModal()" title="Показать QR-код для игроков">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                  <rect x="14" y="14" width="3" height="3" />
-                  <line x1="21" y1="14" x2="21" y2="14.01" />
-                  <line x1="21" y1="21" x2="21" y2="21.01" />
-                  <line x1="17" y1="21" x2="17" y2="21.01" />
-                </svg>
-                QR для игроков
-              </button>
             </div>
             <div
               style="
@@ -1060,41 +1048,54 @@
           <div class="card">
             <h2>История результатов</h2>
             <p class="results-intro">
-              Здесь отображаются завершённые прохождения (когда игрок прошёл все
-              вопросы). Нужна подключённая PostgreSQL; для викторин, созданных
-              только в памяти без БД, записей не будет.
+              Здесь отображаются завершённые прохождения
             </p>
-            <div class="results-toolbar">
-              <label for="results-quiz-filter">Викторина</label>
-              <select id="results-quiz-filter" onchange="loadQuizResults()">
-                <option value="">Все (последние 200)</option>
-              </select>
-              <button
-                type="button"
-                class="btn btn-secondary"
-                onclick="loadQuizResults()"
-              >
-                Обновить
-              </button>
-              <button
-                type="button"
-                class="btn btn-success"
-                id="results-csv-btn"
-                disabled
-                onclick="downloadQuizHistoryCsv()"
-              >
-                Выгрузить в CSV
-              </button>
+            <p
+              id="results-error"
+              class="results-error hidden"
+              role="alert"
+            ></p>
+            <div id="results-quizzes-list" class="results-quizzes-list">
+              <div class="empty-state">Пока нет сохранённых прохождений</div>
             </div>
-            <p id="results-error" class="results-error hidden" role="alert"></p>
-            <div id="results-table-wrap" class="results-table-wrap"></div>
+            <div
+              id="results-table-wrap"
+              class="results-table-wrap"
+              style="margin-top: 1rem"
+            ></div>
           </div>
         </div>
 
         <!-- Игра -->
         <div id="play-tab" class="screen">
           <div class="card">
-            <h2>Управление игрой</h2>
+            <div class="card-header-row">
+              <h2 style="margin: 0">Управление игрой</h2>
+              <button
+                id="play-qr-btn"
+                class="qr-card-btn hidden"
+                onclick="toggleQRModal()"
+                title="Показать QR-код для игроков"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                  <rect x="14" y="14" width="3" height="3" />
+                  <line x1="21" y1="14" x2="21" y2="14.01" />
+                  <line x1="21" y1="21" x2="21" y2="21.01" />
+                  <line x1="17" y1="21" x2="17" y2="21.01" />
+                </svg>
+                QR для игроков
+              </button>
+            </div>
             <div class="info-box">
               <p>
                 Каждый игрок получает случайные вопросы. После ответа — сразу
@@ -1144,22 +1145,6 @@
         <div id="leaderboard-tab" class="screen hidden">
           <div class="card">
             <h2>Рейтинг игроков</h2>
-            <div
-              style="
-                display: flex;
-                gap: 0.75rem;
-                margin-bottom: 1.25rem;
-                flex-wrap: wrap;
-              "
-            >
-              <button
-                class="btn btn-success"
-                onclick="downloadResults()"
-                style="flex: 1; min-width: 200px"
-              >
-                Выгрузить результаты (CSV)
-              </button>
-            </div>
             <div class="players-count" id="players-count">Игроков: 0</div>
             <div id="leaderboard">
               <div class="empty-state">Пока нет игроков</div>

@@ -828,6 +828,161 @@ io.on("connection", (socket) => {
   });
 
   // История результатов (таблица quiz_results)
+  socket.on("get-results-quizzes", async () => {
+    if (!checkSocketRateLimit(socket)) return;
+    if (!adminSessions[socket.id]) return;
+
+    if (!pool) {
+      socket.emit("results-quizzes", {
+        error:
+          "База данных не подключена — результаты не сохраняются и не отображаются.",
+        quizzes: [],
+      });
+      return;
+    }
+
+    try {
+      const res = await pool.query(
+        `SELECT r.quiz_id, q.name AS quiz_name,
+                COUNT(*)::int AS attempts,
+                MAX(r.finished_at) AS last_finished_at
+         FROM quiz_results r
+         INNER JOIN quizzes q ON q.id = r.quiz_id
+         GROUP BY r.quiz_id, q.name
+         ORDER BY last_finished_at DESC
+         LIMIT 200`,
+      );
+
+      socket.emit("results-quizzes", {
+        quizzes: res.rows.map((row) => ({
+          quizDbId: Number(row.quiz_id),
+          quizName: row.quiz_name,
+          attempts: Number(row.attempts || 0),
+          lastFinishedAt: row.last_finished_at,
+        })),
+      });
+    } catch (err) {
+      console.error("Ошибка загрузки списка викторин с результатами:", err.message);
+      socket.emit("results-quizzes", {
+        error: "Не удалось загрузить список: " + err.message,
+        quizzes: [],
+      });
+    }
+  });
+
+  socket.on("get-quiz-results-by-db", async (payload) => {
+    if (!checkSocketRateLimit(socket)) return;
+    if (!adminSessions[socket.id]) return;
+
+    const raw =
+      payload != null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {};
+    const quizDbId = Number(raw.quizDbId);
+
+    if (!pool) {
+      socket.emit("quiz-results", {
+        error:
+          "База данных не подключена — результаты не сохраняются и не отображаются.",
+        results: [],
+        mode: "quiz",
+        quizDbId: Number.isFinite(quizDbId) ? quizDbId : null,
+      });
+      return;
+    }
+
+    if (!Number.isFinite(quizDbId) || quizDbId <= 0) {
+      socket.emit("quiz-results", {
+        error: "Некорректный идентификатор викторины.",
+        results: [],
+        mode: "quiz",
+        quizDbId: null,
+      });
+      return;
+    }
+
+    try {
+      const quizRow = await pool.query(
+        `SELECT id, name FROM quizzes WHERE id = $1`,
+        [quizDbId],
+      );
+      const quizName = quizRow.rows[0]?.name || null;
+
+      const res = await pool.query(
+        `SELECT r.id, r.player_name, r.score, r.total_questions, r.answered_count, r.percentage, r.finished_at
+         FROM quiz_results r
+         WHERE r.quiz_id = $1
+         ORDER BY r.finished_at DESC
+         LIMIT 500`,
+        [quizDbId],
+      );
+
+      socket.emit("quiz-results", {
+        results: res.rows.map((row) => ({
+          id: row.id,
+          playerName: row.player_name,
+          score: Number(row.score),
+          totalQuestions: row.total_questions,
+          answeredCount: row.answered_count,
+          percentage: row.percentage,
+          finishedAt: row.finished_at,
+        })),
+        mode: "quiz",
+        quizDbId,
+        quizName,
+      });
+    } catch (err) {
+      console.error("Ошибка загрузки результатов викторины:", err.message);
+      socket.emit("quiz-results", {
+        error: "Не удалось загрузить результаты: " + err.message,
+        results: [],
+        mode: "quiz",
+        quizDbId,
+      });
+    }
+  });
+
+  socket.on("delete-quiz-results-by-db", async (payload) => {
+    if (!checkSocketRateLimit(socket)) return;
+    if (!adminSessions[socket.id]) return;
+
+    const raw =
+      payload != null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {};
+    const quizDbId = Number(raw.quizDbId);
+
+    if (!pool) {
+      socket.emit("quiz-results-deleted", {
+        error: "База данных не подключена.",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(quizDbId) || quizDbId <= 0) {
+      socket.emit("quiz-results-deleted", {
+        error: "Некорректный идентификатор викторины.",
+      });
+      return;
+    }
+
+    try {
+      const del = await pool.query(`DELETE FROM quiz_results WHERE quiz_id = $1`, [
+        quizDbId,
+      ]);
+      socket.emit("quiz-results-deleted", {
+        quizDbId,
+        deletedCount: del.rowCount || 0,
+        message: `Удалено прохождений: ${del.rowCount || 0}`,
+      });
+    } catch (err) {
+      console.error("Ошибка удаления результатов:", err.message);
+      socket.emit("quiz-results-deleted", {
+        error: "Не удалось удалить результаты: " + err.message,
+      });
+    }
+  });
+
   socket.on("get-quiz-results", async (payload) => {
     if (!checkSocketRateLimit(socket)) return;
     if (!adminSessions[socket.id]) return;

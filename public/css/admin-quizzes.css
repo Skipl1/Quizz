@@ -244,30 +244,61 @@
   margin: 0 0 1.25rem;
 }
 
-.results-toolbar {
+.results-quizzes-list {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 0.25rem;
 }
 
-.results-toolbar label {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.results-toolbar select {
-  flex: 1;
-  min-width: 200px;
-  max-width: 420px;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
+.results-quiz-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
   border: 1px solid var(--border);
-  background: rgba(15, 23, 42, 0.5);
-  color: var(--text);
-  font-size: 0.95rem;
 }
+
+.results-quiz-item:hover {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(139, 92, 246, 0.5);
+  transform: translateX(4px);
+}
+
+.results-quiz-item.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--accent);
+}
+
+.results-quiz-item .name {
+  font-weight: 600;
+}
+
+.results-quiz-item .meta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+/* actions inside quiz rows */
+.results-quiz-item .quiz-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.results-quiz-item .quiz-item-actions .btn {
+  width: auto;
+  padding: 0.6rem 0.75rem;
+  min-width: unset;
+}
+
+/* Старый filter UI удалён (используем список викторин) */
 
 .results-error {
   color: var(--danger);
@@ -283,6 +314,7 @@
   overflow-x: auto;
   border-radius: 12px;
   border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.25);
 }
 
 .admin-results-table {
