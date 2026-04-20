@@ -405,7 +405,6 @@ function sendRestoredPlayerState(socketId, player, quizId, quiz) {
       text: question.text,
       type: question.type,
       options: question.options,
-      correct: question.correct,
       image: question.image,
       timeLeft: timeLeft,
     });
@@ -1235,41 +1234,120 @@ io.on("connection", (socket) => {
     player.isProcessingAnswer = true;
 
     const quiz = quizzes.find((q) => q.id === currentQuizId);
-    if (!quiz) return;
+    if (!quiz) {
+      player.isProcessingAnswer = false;
+      return;
+    }
 
     const question = quiz.questions[player.currentQuestion.originalIndex];
+    const timeLimitSec = question.timeLimit || QUESTION_TIME;
+    const elapsedSec =
+      player.questionStartTime != null
+        ? (Date.now() - player.questionStartTime) / 1000
+        : 0;
+    // Небольшой запас на сетевую задержку/таймер клиента
+    const graceSec = 0.75;
+    if (elapsedSec > timeLimitSec + graceSec) {
+      player.answeredQuestions.push(player.currentQuestion.originalIndex);
+      player.isProcessingAnswer = false;
+      broadcastLeaderboard();
+      setTimeout(() => {
+        sendNextQuestionToPlayer(socket.id, quiz);
+      }, 500);
+      return;
+    }
 
     // Подсчёт баллов: максимум 1 балл за вопрос
     let pointsEarned = 0;
+    const qType = question.type;
 
-    if (typeof answerData === "object" && answerData !== null) {
-      // Ordering или Matching или Text
-      if (answerData.type === "ordering") {
-        // Сравниваем порядок — полностью правильно или нет
+    if (qType === "ordering") {
+      if (
+        typeof answerData === "object" &&
+        answerData !== null &&
+        answerData.type === "ordering"
+      ) {
+        const userOrder = answerData.answer;
+        const expected = question.correct;
+        const n = Array.isArray(expected) ? expected.length : 0;
+        const isValid =
+          Array.isArray(userOrder) &&
+          userOrder.length === n &&
+          userOrder.every((x) => Number.isInteger(x)) &&
+          new Set(userOrder).size === n &&
+          userOrder.every((x) => x >= 0 && x < n);
         const isCorrect =
-          JSON.stringify(answerData.answer) ===
-          JSON.stringify(question.correct);
+          isValid &&
+          JSON.stringify(userOrder) === JSON.stringify(expected);
         pointsEarned = isCorrect ? 1 : 0;
-      } else if (answerData.type === "matching") {
-        // Matching — серверная проверка реальных пар
-        const pairs = answerData.pairs; // [{questionIndex, answerIndex}, ...]
+      }
+    } else if (qType === "matching") {
+      if (
+        typeof answerData === "object" &&
+        answerData !== null &&
+        answerData.type === "matching"
+      ) {
+        const pairs = answerData.pairs;
         if (!Array.isArray(pairs)) {
           pointsEarned = 0;
         } else {
-          const isFullyCorrect =
-            pairs.length === question.correct.length &&
-            pairs.every((p) => {
-              // Проверяем что questionIndex === answerIndex (правильная пара)
-              return p.questionIndex === p.answerIndex;
-            });
-          pointsEarned = isFullyCorrect ? 1 : 0;
+          const n = Array.isArray(question.options)
+            ? question.options.length
+            : 0;
+          const expectedLen = Array.isArray(question.correct)
+            ? question.correct.length
+            : 0;
+          if (n < 2 || expectedLen !== n || pairs.length !== n) {
+            pointsEarned = 0;
+          } else {
+            const qIdx = new Set();
+            const aIdx = new Set();
+            let validShape = true;
+            for (const p of pairs) {
+              if (!p || typeof p !== "object") {
+                validShape = false;
+                break;
+              }
+              const qi = Number(p.questionIndex);
+              const ai = Number(p.answerIndex);
+              if (
+                !Number.isInteger(qi) ||
+                !Number.isInteger(ai) ||
+                qi < 0 ||
+                qi >= n ||
+                ai < 0 ||
+                ai >= n
+              ) {
+                validShape = false;
+                break;
+              }
+              if (qIdx.has(qi) || aIdx.has(ai)) {
+                validShape = false;
+                break;
+              }
+              qIdx.add(qi);
+              aIdx.add(ai);
+            }
+            const isFullyCorrect =
+              validShape &&
+              pairs.every((p) => p.questionIndex === p.answerIndex);
+            pointsEarned = isFullyCorrect ? 1 : 0;
+          }
         }
-      } else if (answerData.type === "text") {
-        // Текстовый ответ — полностью правильно или нет
+      }
+    } else if (
+      qType === "fill_blank" ||
+      qType === "open_ended" ||
+      qType === "text"
+    ) {
+      if (
+        typeof answerData === "object" &&
+        answerData !== null &&
+        answerData.type === "text"
+      ) {
         const userAnswer = sanitizeInput(answerData.answer, 500)
           .toLowerCase()
           .trim();
-        // Поддержка как строк так и объектов {text, image}
         const correctOption = question.options[0];
         const correctAnswer =
           typeof correctOption === "object"
@@ -1278,32 +1356,50 @@ io.on("connection", (socket) => {
         pointsEarned =
           userAnswer === correctAnswer.toLowerCase().trim() ? 1 : 0;
       }
-    } else if (Array.isArray(answerData)) {
-      // Множественный выбор — пропорционально правильным ответам
+    } else if (qType === "multiple_choice" || qType === "true_false") {
       const correctAnswers = question.correct || [];
-      const userAnswers = answerData;
+      const optCount = Array.isArray(question.options)
+        ? question.options.length
+        : 0;
 
-      if (correctAnswers.length === 0) {
-        pointsEarned = 0;
+      if (Array.isArray(answerData)) {
+        if (correctAnswers.length <= 1) {
+          pointsEarned = 0;
+        } else {
+          const userAnswers = answerData;
+          const validIndices =
+            userAnswers.every(
+              (a) => Number.isInteger(a) && a >= 0 && a < optCount,
+            ) && new Set(userAnswers).size === userAnswers.length;
+
+          if (!validIndices || correctAnswers.length === 0) {
+            pointsEarned = 0;
+          } else {
+            const correctSelected = userAnswers.filter((a) =>
+              correctAnswers.includes(a),
+            ).length;
+            const incorrectSelected = userAnswers.filter(
+              (a) => !correctAnswers.includes(a),
+            ).length;
+            const rawPoints =
+              correctSelected / correctAnswers.length -
+              incorrectSelected / (question.options?.length || 1);
+            pointsEarned = Math.max(0, Math.min(1, rawPoints));
+          }
+        }
       } else {
-        // Считаем сколько правильных ответов выбрал пользователь
-        const correctSelected = userAnswers.filter((a) =>
-          correctAnswers.includes(a),
-        ).length;
-        // Считаем сколько неправильных ответов выбрал пользователь (штраф)
-        const incorrectSelected = userAnswers.filter(
-          (a) => !correctAnswers.includes(a),
-        ).length;
-        // Пропорциональный балл: (правильные / всего_правильных) - штраф за неправильные
-        // Но не меньше 0
-        const rawPoints =
-          correctSelected / correctAnswers.length -
-          incorrectSelected / (question.options?.length || 1);
-        pointsEarned = Math.max(0, Math.min(1, rawPoints));
+        const idx = Number(answerData);
+        if (
+          Number.isInteger(idx) &&
+          idx >= 0 &&
+          idx < optCount &&
+          correctAnswers.length <= 1
+        ) {
+          pointsEarned = question.correct.includes(idx) ? 1 : 0;
+        } else {
+          pointsEarned = 0;
+        }
       }
-    } else {
-      // Одиночный выбор — полностью правильно или нет
-      pointsEarned = question.correct.includes(answerData) ? 1 : 0;
     }
 
     // Начисляем баллы (максимум 1 за вопрос)
@@ -1337,7 +1433,23 @@ io.on("connection", (socket) => {
     if (!player || !currentQuizId) return;
     const quiz = quizzes.find((q) => q.id === currentQuizId);
     if (!quiz) return;
+    if (player.isProcessingAnswer) return;
     if (player.currentQuestion) {
+      if (
+        player.answeredQuestions.includes(player.currentQuestion.originalIndex)
+      ) {
+        return;
+      }
+      const question = quiz.questions[player.currentQuestion.originalIndex];
+      const timeLimitSec = question.timeLimit || QUESTION_TIME;
+      const elapsedSec =
+        player.questionStartTime != null
+          ? (Date.now() - player.questionStartTime) / 1000
+          : 0;
+      const graceSec = 0.75;
+      if (elapsedSec + graceSec < timeLimitSec) {
+        return;
+      }
       player.answeredQuestions.push(player.currentQuestion.originalIndex);
     }
     sendNextQuestionToPlayer(socket.id, quiz);
@@ -1432,7 +1544,6 @@ function sendNextQuestionToPlayer(playerId, quiz) {
     text: question.text,
     type: question.type,
     options: question.options,
-    correct: question.correct,
     image: question.image,
     timeLeft: question.timeLimit || QUESTION_TIME,
   });
