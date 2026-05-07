@@ -17,6 +17,66 @@ function register() {
 }
 
 /**
+ * Изменить имя игрока после регистрации
+ */
+function editPlayerName() {
+  const nameEl = document.getElementById("display-name");
+  const input = document.getElementById("edit-name-input");
+  const editBtn = document.getElementById("edit-name-btn");
+  const saveBtn = document.getElementById("save-name-btn");
+  const cancelBtn = document.getElementById("cancel-name-btn");
+  if (!nameEl || !input || !editBtn || !saveBtn || !cancelBtn) return;
+
+  input.value = String(playerName || nameEl.textContent || "").trim();
+  nameEl.classList.add("hidden");
+  input.classList.remove("hidden");
+  editBtn.classList.add("hidden");
+  saveBtn.classList.remove("hidden");
+  cancelBtn.classList.remove("hidden");
+  input.focus();
+  input.select();
+}
+
+function cancelPlayerNameEdit() {
+  const nameEl = document.getElementById("display-name");
+  const input = document.getElementById("edit-name-input");
+  const editBtn = document.getElementById("edit-name-btn");
+  const saveBtn = document.getElementById("save-name-btn");
+  const cancelBtn = document.getElementById("cancel-name-btn");
+  if (!nameEl || !input || !editBtn || !saveBtn || !cancelBtn) return;
+
+  input.classList.add("hidden");
+  nameEl.classList.remove("hidden");
+  saveBtn.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  editBtn.classList.remove("hidden");
+}
+
+function savePlayerNameEdit() {
+  const input = document.getElementById("edit-name-input");
+  if (!input) return;
+  const name = String(input.value || "").trim().slice(0, 50);
+  if (!name) {
+    input.focus();
+    return;
+  }
+  socket.emit("change-name", { name });
+}
+
+// Enter = save, Esc = cancel
+document.addEventListener("keydown", (e) => {
+  const input = document.getElementById("edit-name-input");
+  if (!input || input.classList.contains("hidden")) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    savePlayerNameEdit();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    cancelPlayerNameEdit();
+  }
+});
+
+/**
  * Проверка сохранённой сессии
  * Работает только в рамках одной викторины
  * Вызывается из index-init.js при DOMContentLoaded
@@ -92,6 +152,26 @@ socket.on("registered", (data) => {
     const adminLink = document.querySelector(".secondary-action");
     if (adminLink) adminLink.style.display = "none";
   }
+
+  // Если открыто редактирование — закрываем и обновляем поле
+  const input = document.getElementById("edit-name-input");
+  if (input) input.value = data.name;
+  if (typeof cancelPlayerNameEdit === "function") cancelPlayerNameEdit();
+});
+
+socket.on("name-changed", (data) => {
+  if (!data || !data.name) return;
+  playerName = data.name;
+  const el = document.getElementById("display-name");
+  if (el) el.textContent = data.name;
+  const session = getSessionData();
+  if (session?.playerId) {
+    saveSession({ playerId: session.playerId, name: data.name });
+  }
+
+  const input = document.getElementById("edit-name-input");
+  if (input) input.value = data.name;
+  if (typeof cancelPlayerNameEdit === "function") cancelPlayerNameEdit();
 });
 
 // Обработка случая когда сессия не найдена на сервере

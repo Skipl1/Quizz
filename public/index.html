@@ -44,7 +44,47 @@
       <div id="waiting-screen" class="screen">
         <h1>Ожидание</h1>
         <div class="player-info">
-          <span class="player-name" id="display-name"></span>
+          <div class="player-name-edit" id="player-name-edit">
+            <span class="player-name" id="display-name"></span>
+            <input
+              id="edit-name-input"
+              class="player-name-input hidden"
+              type="text"
+              maxlength="20"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              class="btn btn-icon btn-secondary player-name-edit-btn"
+              id="edit-name-btn"
+              onclick="editPlayerName()"
+              type="button"
+              title="Изменить имя"
+              aria-label="Изменить имя"
+            >
+              ✎
+            </button>
+            <button
+              class="btn btn-icon btn-success player-name-save-btn hidden"
+              id="save-name-btn"
+              onclick="savePlayerNameEdit()"
+              type="button"
+              title="Сохранить"
+              aria-label="Сохранить имя"
+            >
+              ✓
+            </button>
+            <button
+              class="btn btn-icon btn-danger player-name-cancel-btn hidden"
+              id="cancel-name-btn"
+              onclick="cancelPlayerNameEdit()"
+              type="button"
+              title="Отмена"
+              aria-label="Отменить"
+            >
+              ✕
+            </button>
+          </div>
           <span id="restored-badge" class="restored-badge" style="display: none"
             >Восстановлено</span
           >

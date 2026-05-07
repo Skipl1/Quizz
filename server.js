@@ -1679,6 +1679,35 @@ io.on("connection", (socket) => {
     broadcastLeaderboard();
   });
 
+  socket.on("change-name", (payload, callback) => {
+    if (!checkSocketRateLimit(socket)) return;
+    const player = players[socket.id];
+    const raw =
+      payload != null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {};
+    const name = sanitizeInput(raw.name, 50);
+
+    if (!player) {
+      if (typeof callback === "function") {
+        callback({ success: false, error: "Игрок не зарегистрирован" });
+      }
+      return;
+    }
+
+    if (!name) {
+      if (typeof callback === "function") {
+        callback({ success: false, error: "Имя не может быть пустым" });
+      }
+      return;
+    }
+
+    player.name = name;
+    io.to(socket.id).emit("name-changed", { name });
+    if (typeof callback === "function") callback({ success: true, name });
+    broadcastLeaderboard();
+  });
+
   socket.on("submit-answer", async (answerData) => {
     const player = players[socket.id];
     if (!player || !currentQuizId) return;
