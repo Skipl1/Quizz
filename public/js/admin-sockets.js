@@ -42,13 +42,14 @@ function renderStandingsTable(container, rows, options = {}) {
   }
 
   const showDates = Boolean(options.showDates);
+  const showCorrect = options.showCorrect !== false;
   container.innerHTML = `
     <table class="admin-results-table">
       <thead>
         <tr>
           <th class="col-rank">Место</th>
           <th>Игрок</th>
-          <th class="col-num">Правильно</th>
+          ${showCorrect ? '<th class="col-num">Правильно</th>' : ""}
           <th class="col-num">Отвечено</th>
           <th class="col-num">Время</th>
           <th>Статус</th>
@@ -61,12 +62,12 @@ function renderStandingsTable(container, rows, options = {}) {
             const rank = Number(r.rank || idx + 1);
             const trClass = rank <= 3 ? ` class="rank-top rank-${rank}"` : "";
             const total = Number(r.totalQuestions || 0);
-            const correct = Number(r.correctCount || 0);
+            const correct = Number(r.correctCount ?? r.correct ?? 0);
             const answered = Number(r.answeredCount ?? r.answered ?? 0);
             return `<tr${trClass}>
               <td class="col-rank"><span class="rank-badge">${rank}</span></td>
               <td>${escapeHtml(r.playerName || r.name || "")}</td>
-              <td class="col-num">${correct}${total ? ` / ${total}` : ""}</td>
+              ${showCorrect ? `<td class="col-num">${correct}${total ? ` / ${total}` : ""}</td>` : ""}
               <td class="col-num">${answered}${total ? ` / ${total}` : ""}</td>
               <td class="col-num">${escapeHtml(formatStandingDuration(r.elapsedMs))}</td>
               <td>${escapeHtml(formatStandingStatus(r.status))}</td>
@@ -511,5 +512,6 @@ socket.on("live-standings", (standings) => {
   const wrap = document.getElementById("live-standings-wrap");
   renderStandingsTable(wrap, standings, {
     emptyText: "Пока нет участников",
+    showCorrect: false,
   });
 });
