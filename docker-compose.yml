@@ -2,6 +2,29 @@
 # (см. .env.example). На Render в DATABASE_URL укажите postgresql://USER:PASS@хост:5432/DB
 
 services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quiz}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-quiz}
+      DATABASE_SSL: "false"
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-CHANGE_ME_set_in_env}
+      ADMIN_SESSION_TTL_MS: ${ADMIN_SESSION_TTL_MS:-10800000}
+      QUESTION_TIME_SECONDS: ${QUESTION_TIME_SECONDS:-30}
+      HTTP_RATE_WINDOW_MS: ${HTTP_RATE_WINDOW_MS:-300000}
+      HTTP_RATE_MAX: ${HTTP_RATE_MAX:-1000}
+      SOCKET_RATE_WINDOW_MS: ${SOCKET_RATE_WINDOW_MS:-15000}
+      SOCKET_RATE_MAX_EVENTS: ${SOCKET_RATE_MAX_EVENTS:-100}
+      SOCKET_RATE_WARN_THRESHOLD: ${SOCKET_RATE_WARN_THRESHOLD:-60}
+    ports:
+      - "${APP_PUBLISH_PORT:-3000}:3000"
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped

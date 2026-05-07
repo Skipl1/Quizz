@@ -125,60 +125,13 @@ socket.on("update-leaderboard", (leaderboard) => {
  * Игрок закончил викторину — очищаем сессию
  */
 socket.on("player-quiz-ended", (data) => {
-  document.getElementById("final-score").textContent = data.score;
+  document.getElementById("final-score").textContent =
+    `${data.correctCount || 0} из ${data.totalQuestions || 0}`;
 
   // Сессия больше не нужна — игрок завершил викторину
   clearSession();
 
-  // Запрашиваем финальный leaderboard
-  socket.emit("get-final-leaderboard");
-
   showScreen("end-screen");
-});
-
-/**
- * Финальный leaderboard
- */
-socket.on("final-leaderboard", (leaderboard) => {
-  const container = document.getElementById("final-leaderboard");
-  container.innerHTML = "";
-
-  if (leaderboard.length === 0) {
-    container.innerHTML = "<p style='text-align: center; color: var(--text-muted);'>Нет игроков</p>";
-    return;
-  }
-
-  let html = `
-    <table class="leaderboard-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Имя</th>
-          <th>Баллы</th>
-          <th>Процент</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-
-  leaderboard.forEach((player, index) => {
-    const rank = index + 1;
-    const medals = ["🥇", "🥈", "🥉"];
-    const medal = rank <= 3 ? medals[rank - 1] : rank;
-    const isCurrentUser = player.name === playerName;
-
-    html += `
-      <tr class="${isCurrentUser ? "player-row" : ""}">
-        <td class="rank"><span class="medal">${medal}</span></td>
-        <td class="name">${escapeHtml(player.name)}</td>
-        <td class="score">${player.score.toFixed(2)}</td>
-        <td style="text-align: right; color: var(--text-muted);">${player.percentage}%</td>
-      </tr>
-    `;
-  });
-
-  html += "</tbody></table>";
-  container.innerHTML = html;
 });
 
 /**

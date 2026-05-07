@@ -15,6 +15,13 @@
   <body>
     <nav>
       <div class="logo">QUIZZ<span>.</span></div>
+      <button
+        id="admin-logout-btn"
+        class="btn btn-secondary btn-small hidden"
+        onclick="adminLogout()"
+      >
+        Выйти
+      </button>
     </nav>
 
     <div class="container">
@@ -1039,7 +1046,7 @@
           <div class="card">
             <h2>История результатов</h2>
             <p class="results-intro">
-              Здесь отображаются завершённые прохождения
+              Здесь отображаются сохранённые прохождения и места участников
             </p>
             <div
               id="results-finished-banner"
@@ -1135,6 +1142,13 @@
               </button>
 
               <div class="status" id="game-status">Ожидание запуска...</div>
+              <div
+                id="live-standings-wrap"
+                class="results-table-wrap live-standings-wrap"
+                style="margin-top: 1rem"
+              >
+                <div class="empty-state">Пока нет участников</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1171,9 +1185,6 @@
         <h3>QR-код для игроков</h3>
         <p class="qr-hint">Отсканируйте QR-код, чтобы перейти на страницу игры</p>
         <div id="qrcode"></div>
-        <a href="https://quizz-jj9a.onrender.com" target="_blank" class="qr-link-btn">
-          Открыть страницу игры →
-        </a>
       </div>
     </div>
   </body>

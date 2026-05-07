@@ -13,6 +13,76 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function formatStandingDuration(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return "—";
+  const totalSeconds = Math.round(n / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatStandingStatus(status) {
+  const labels = {
+    waiting: "Ожидает",
+    in_progress: "Проходит",
+    completed: "Завершил",
+    disconnected: "Вышел",
+    stopped: "Остановлено",
+  };
+  return labels[status] || status || "—";
+}
+
+function renderStandingsTable(container, rows, options = {}) {
+  if (!container) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state">${escapeHtml(options.emptyText || "Пока нет участников")}</div>`;
+    return;
+  }
+
+  const showDates = Boolean(options.showDates);
+  container.innerHTML = `
+    <table class="admin-results-table">
+      <thead>
+        <tr>
+          <th class="col-rank">Место</th>
+          <th>Игрок</th>
+          <th class="col-num">Правильно</th>
+          <th class="col-num">Отвечено</th>
+          <th class="col-num">Время</th>
+          <th>Статус</th>
+          ${showDates ? "<th>Старт</th><th>Финиш</th>" : ""}
+        </tr>
+      </thead>
+      <tbody>
+        ${list
+          .map((r, idx) => {
+            const rank = Number(r.rank || idx + 1);
+            const trClass = rank <= 3 ? ` class="rank-top rank-${rank}"` : "";
+            const total = Number(r.totalQuestions || 0);
+            const correct = Number(r.correctCount || 0);
+            const answered = Number(r.answeredCount ?? r.answered ?? 0);
+            return `<tr${trClass}>
+              <td class="col-rank"><span class="rank-badge">${rank}</span></td>
+              <td>${escapeHtml(r.playerName || r.name || "")}</td>
+              <td class="col-num">${correct}${total ? ` / ${total}` : ""}</td>
+              <td class="col-num">${answered}${total ? ` / ${total}` : ""}</td>
+              <td class="col-num">${escapeHtml(formatStandingDuration(r.elapsedMs))}</td>
+              <td>${escapeHtml(formatStandingStatus(r.status))}</td>
+              ${
+                showDates
+                  ? `<td>${escapeHtml(formatResultsDate(r.startedAt))}</td><td>${escapeHtml(formatResultsDate(r.completedAt))}</td>`
+                  : ""
+              }
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 // ---------- Викторины ----------
 
 socket.on("quiz-created", () => {
@@ -322,6 +392,7 @@ socket.on("quiz-ready", (data) => {
   document
     .getElementById("game-info-card")
     .classList.remove("quiz-running");
+  socket.emit("get-live-standings");
 });
 
 socket.on("quiz-stopped", () => {
@@ -338,6 +409,10 @@ socket.on("quiz-stopped", () => {
   document.getElementById("game-active").classList.add("hidden");
   document.getElementById("game-status").textContent =
     "Ожидание запуска...";
+  const standingsWrap = document.getElementById("live-standings-wrap");
+  if (standingsWrap) {
+    standingsWrap.innerHTML = '<div class="empty-state">Пока нет участников</div>';
+  }
   document.getElementById("start-btn").disabled = false;
   document.getElementById("stop-btn").disabled = true;
   document
@@ -386,11 +461,12 @@ socket.on("game-state", (data) => {
         .classList.remove("quiz-running");
     }
 
+    socket.emit("get-live-standings");
   }
 });
 
 // Все игроки завершили викторину — переключаем админа к результатам
-socket.on("all-players-finished", () => {
+socket.on("all-players-finished", (data) => {
   if (typeof showTab === "function") {
     showTab("results");
   }
@@ -406,14 +482,15 @@ socket.on("all-players-finished", () => {
   }
   // Попробуем автоматически раскрыть результаты текущей викторины (если она из БД)
   const quizId = typeof currentQuizId === "string" ? currentQuizId : "";
-  if (quizId.startsWith("db-")) {
-    const dbId = Number(quizId.slice(3));
+  if (data?.quizDbId || quizId.startsWith("db-")) {
+    const dbId = Number(data?.quizDbId || quizId.slice(3));
     if (Number.isFinite(dbId) && dbId > 0) {
       const nameEl = document.getElementById("current-quiz-name");
       const nameText = nameEl ? String(nameEl.textContent || "") : "";
       // current-quiz-name выглядит как "Название (N вопросов)" — отрежем хвост
       const cleanedName = nameText.replace(/\s*\(\s*\d+\s+вопрос.*\)\s*$/i, "").trim();
       window.__pendingAutoOpenResultsQuizDbId = dbId;
+      window.__pendingAutoOpenResultsRunId = data?.runId || null;
       window.__pendingAutoOpenResultsQuizName = cleanedName;
     }
   }
@@ -430,25 +507,9 @@ socket.on("players-count", (data) => {
   console.log(`Игроков онлайн: ${data.count}`);
 });
 
-socket.on("final-leaderboard", (leaderboard) => {
-  const quizName =
-    document.getElementById("current-quiz-name").textContent ||
-    "Викторина";
-  const timestamp = new Date()
-    .toISOString()
-    .slice(0, 19)
-    .replace(/:/g, "-");
-
-  let csv = "Место,Игрок,Баллы,Процент,Вопросов решено\n";
-  leaderboard.forEach((p, i) => {
-    csv += `${i + 1},"${p.name}",${p.score},${p.percentage}%,${p.answered}\n`;
+socket.on("live-standings", (standings) => {
+  const wrap = document.getElementById("live-standings-wrap");
+  renderStandingsTable(wrap, standings, {
+    emptyText: "Пока нет участников",
   });
-
-  const blob = new Blob(["\ufeff" + csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `${quizName}_${timestamp}.csv`;
-  link.click();
 });
