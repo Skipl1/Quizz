@@ -30,7 +30,6 @@
             type="text"
             id="player-name"
             placeholder="Ваше имя"
-            maxlength="20"
           />
         </div>
 
@@ -165,12 +164,10 @@
         >
           <span>Ваш результат:</span>
           <span class="final-score" id="final-score">0</span>
-          <span class="player-score" style="font-size: 1rem">баллов</span>
+          <span class="player-score" style="font-size: 1rem"
+            >правильных ответов</span
+          >
         </div>
-        <h2 style="margin-bottom: 1rem; font-size: 1.1rem">
-          Финальный рейтинг:
-        </h2>
-        <div id="final-leaderboard"></div>
         <button
           class="btn"
           onclick="clearSession(); location.reload()"

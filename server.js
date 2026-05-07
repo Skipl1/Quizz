@@ -1,10 +1,13 @@
 require("dotenv").config();
+const crypto = require("crypto");
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const rateLimit = require("express-rate-limit");
+const XLSX = require("xlsx");
 const { getPoolOptions } = require("./lib/pgPoolConfig");
+const { ensureDatabaseSchema } = require("./lib/schema");
 
 const app = express();
 
@@ -113,6 +116,82 @@ function sanitizeInput(str, maxLength = 500) {
     .replace(/'/g, "&#x27;");
 }
 
+function generateAdminToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function generateRunId() {
+  return `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+}
+
+function createAdminSession(socket) {
+  const token = generateAdminToken();
+  const expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
+  adminTokens.set(token, { expiresAt });
+  adminSessions[socket.id] = { token, expiresAt };
+  return { token, expiresAt };
+}
+
+function bindAdminSession(socket, token, expiresAt) {
+  adminSessions[socket.id] = { token, expiresAt };
+}
+
+function clearAdminSession(socket) {
+  const session = adminSessions[socket.id];
+  if (session?.token) {
+    adminTokens.delete(session.token);
+  }
+  delete adminSessions[socket.id];
+}
+
+function ensureAdminSession(socket) {
+  const session = adminSessions[socket.id];
+  if (!session) return false;
+
+  const tokenRecord = adminTokens.get(session.token);
+  const expiresAt = tokenRecord?.expiresAt || session.expiresAt;
+  if (!tokenRecord || !expiresAt || expiresAt <= Date.now()) {
+    clearAdminSession(socket);
+    socket.emit("admin-session-expired");
+    return false;
+  }
+
+  session.expiresAt = expiresAt;
+  return true;
+}
+
+function restoreAdminSession(socket, token) {
+  if (typeof token !== "string" || !token) return null;
+  const tokenRecord = adminTokens.get(token);
+  if (!tokenRecord || tokenRecord.expiresAt <= Date.now()) {
+    adminTokens.delete(token);
+    return null;
+  }
+  bindAdminSession(socket, token, tokenRecord.expiresAt);
+  return { token, expiresAt: tokenRecord.expiresAt };
+}
+
+function sanitizeFilenamePart(value) {
+  return String(value || "results")
+    .replace(/[/\\?%*:|"<>]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 120);
+}
+
+function formatDurationMs(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function toIsoOrEmpty(value) {
+  if (!value) return "";
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
 // Парсинг JSON
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
@@ -135,11 +214,15 @@ if (!pool) {
 // База данных в оперативной памяти (если нет БД)
 let quizzes = [];
 let currentQuizId = null;
+let currentRunId = null;
 let quizStarted = false;
 let quizFinished = false;
 const QUESTION_TIME = Number(process.env.QUESTION_TIME_SECONDS) || 30;
+const ADMIN_SESSION_TTL_MS =
+  Number(process.env.ADMIN_SESSION_TTL_MS) || 3 * 60 * 60 * 1000;
 const players = {};
 const adminSessions = {};
+const adminTokens = new Map();
 
 // Инициализация БД
 async function initDatabase() {
@@ -190,42 +273,7 @@ async function initDatabase() {
     await pool.query("SELECT NOW()");
     console.log("✅ БД подключена");
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS quizzes (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS questions (
-        id SERIAL PRIMARY KEY,
-        quiz_id INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
-        text TEXT NOT NULL,
-        type VARCHAR(50) DEFAULT 'multiple_choice',
-        options JSONB,
-        correct JSONB,
-        image TEXT,
-        order_index INTEGER DEFAULT 0,
-        time_limit INTEGER DEFAULT 30,
-        order_answer JSONB
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS quiz_results (
-        id SERIAL PRIMARY KEY,
-        quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-        player_name VARCHAR(255) NOT NULL,
-        score NUMERIC(12, 6) NOT NULL,
-        total_questions INTEGER NOT NULL,
-        answered_count INTEGER NOT NULL,
-        percentage SMALLINT,
-        finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_quiz_results_quiz_id ON quiz_results(quiz_id)`,
-    );
+    await ensureDatabaseSchema(pool);
     console.log("База данных подключена и готова.");
 
     // Загрузка викторин из БД
@@ -331,6 +379,7 @@ async function loadQuizzesFromDB() {
           correct: q.correct || [],
           image: q.image,
           orderIndex: q.order_index,
+          timeLimit: q.time_limit || QUESTION_TIME,
         })),
       });
     }
@@ -348,6 +397,334 @@ function shuffleArray(array) {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+function getElapsedMs(player) {
+  if (Number.isFinite(player.elapsedMs)) return player.elapsedMs;
+  if (Number.isFinite(player.startedAtMs)) {
+    return Date.now() - player.startedAtMs;
+  }
+  return null;
+}
+
+function getCompletionStatusRank(status) {
+  return status === "completed" ? 0 : 1;
+}
+
+function sortStandingsRows(rows) {
+  return rows.sort((a, b) => {
+    const ac = Number(a.correctCount || 0);
+    const bc = Number(b.correctCount || 0);
+    if (bc !== ac) return bc - ac;
+
+    const ar = getCompletionStatusRank(a.status);
+    const br = getCompletionStatusRank(b.status);
+    if (ar !== br) return ar - br;
+
+    const ae =
+      Number.isFinite(a.elapsedMs) && a.elapsedMs != null
+        ? Number(a.elapsedMs)
+        : Number.MAX_SAFE_INTEGER;
+    const be =
+      Number.isFinite(b.elapsedMs) && b.elapsedMs != null
+        ? Number(b.elapsedMs)
+        : Number.MAX_SAFE_INTEGER;
+    if (ae !== be) return ae - be;
+
+    return String(a.name || a.playerName || "").localeCompare(
+      String(b.name || b.playerName || ""),
+      "ru",
+    );
+  });
+}
+
+function getQuestionDisplayOptions(player, question, originalIndex) {
+  if (
+    question.type !== "multiple_choice" ||
+    !Array.isArray(question.options)
+  ) {
+    return question.options;
+  }
+
+  const mapping = player.answerOptionMaps?.[originalIndex];
+  if (!Array.isArray(mapping) || mapping.length !== question.options.length) {
+    return question.options;
+  }
+
+  return mapping.map((optionIndex) => question.options[optionIndex]);
+}
+
+function prepareQuestionDisplayOptions(player, question, originalIndex) {
+  if (
+    question.type !== "multiple_choice" ||
+    !Array.isArray(question.options)
+  ) {
+    return question.options;
+  }
+
+  if (!player.answerOptionMaps) player.answerOptionMaps = {};
+  if (!Array.isArray(player.answerOptionMaps[originalIndex])) {
+    const entries = question.options.map((_, index) => index);
+    player.answerOptionMaps[originalIndex] = shuffleArray(entries);
+  }
+
+  return getQuestionDisplayOptions(player, question, originalIndex);
+}
+
+function createPlayerState(name, playerKey) {
+  return {
+    playerKey,
+    name,
+    score: 0,
+    correctCount: 0,
+    questionsQueue: [],
+    currentQuestion: null,
+    answeredQuestions: [],
+    questionStartTime: null,
+    quizCompletionHandled: false,
+    attemptDbId: null,
+    startedAtMs: null,
+    completedAtMs: null,
+    elapsedMs: null,
+    status: "waiting",
+    answerOptionMaps: {},
+  };
+}
+
+async function createAttemptForPlayer(playerId, player, quiz) {
+  if (!quizStarted || !currentRunId) return;
+  player.playerKey = player.playerKey || playerId;
+  player.startedAtMs = player.startedAtMs || Date.now();
+  player.status = player.status === "completed" ? "completed" : "in_progress";
+
+  if (!pool || !quiz?.dbId) return;
+
+  try {
+    const res = await pool.query(
+      `INSERT INTO quiz_attempts
+        (quiz_id, run_id, player_key, player_name, status, correct_count,
+         answered_count, total_questions, started_at, completed_at, elapsed_ms)
+       VALUES ($1, $2, $3, $4, 'in_progress', 0, 0, $5, CURRENT_TIMESTAMP, NULL, NULL)
+       ON CONFLICT (run_id, player_key)
+       DO UPDATE SET
+         player_name = EXCLUDED.player_name,
+         status = CASE
+           WHEN quiz_attempts.status = 'completed' THEN quiz_attempts.status
+           ELSE 'in_progress'
+         END,
+         total_questions = EXCLUDED.total_questions,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id, started_at`,
+      [
+        quiz.dbId,
+        currentRunId,
+        player.playerKey,
+        player.name,
+        quiz.questions.length,
+      ],
+    );
+    player.attemptDbId = res.rows[0]?.id || player.attemptDbId;
+    const startedAt = res.rows[0]?.started_at
+      ? new Date(res.rows[0].started_at).getTime()
+      : null;
+    if (Number.isFinite(startedAt)) player.startedAtMs = startedAt;
+  } catch (err) {
+    console.error("Ошибка создания live-прохождения:", err.message);
+  }
+}
+
+async function markAttemptStatus(player, status) {
+  if (!player) return;
+  if (player.status === "completed" && status !== "completed") return;
+  player.status = status;
+
+  if (!pool || !player.attemptDbId) return;
+
+  const completedAtStatuses = new Set(["completed", "stopped"]);
+  const shouldComplete = completedAtStatuses.has(status);
+  const elapsedMs =
+    shouldComplete && Number.isFinite(player.startedAtMs)
+      ? getElapsedMs(player)
+      : player.elapsedMs;
+
+  if (shouldComplete) {
+    player.completedAtMs = Date.now();
+    player.elapsedMs = elapsedMs;
+  }
+
+  try {
+    await pool.query(
+      `UPDATE quiz_attempts
+       SET status = $2,
+           completed_at = CASE WHEN $3 THEN COALESCE(completed_at, CURRENT_TIMESTAMP) ELSE completed_at END,
+           elapsed_ms = CASE WHEN $3 THEN COALESCE($4, elapsed_ms) ELSE elapsed_ms END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [player.attemptDbId, status, shouldComplete, elapsedMs],
+    );
+  } catch (err) {
+    console.error("Ошибка обновления статуса прохождения:", err.message);
+  }
+}
+
+async function recordAttemptAnswer({
+  quiz,
+  player,
+  question,
+  questionIndex,
+  answerPayload,
+  pointsEarned,
+  elapsedMs,
+}) {
+  if (!pool || !quiz?.dbId || !player?.attemptDbId) return;
+
+  const isCorrect = pointsEarned >= 1;
+  try {
+    await pool.query(
+      `INSERT INTO quiz_attempt_answers
+        (attempt_id, question_id, question_index, answer_payload, is_correct, points, elapsed_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (attempt_id, question_index)
+       DO UPDATE SET
+         question_id = EXCLUDED.question_id,
+         answer_payload = EXCLUDED.answer_payload,
+         is_correct = EXCLUDED.is_correct,
+         points = EXCLUDED.points,
+         elapsed_ms = EXCLUDED.elapsed_ms,
+         answered_at = CURRENT_TIMESTAMP`,
+      [
+        player.attemptDbId,
+        question.id || null,
+        questionIndex,
+        JSON.stringify(answerPayload || null),
+        isCorrect,
+        pointsEarned,
+        Number.isFinite(elapsedMs) ? Math.round(elapsedMs) : null,
+      ],
+    );
+
+    await pool.query(
+      `UPDATE quiz_attempts
+       SET correct_count = $2,
+           answered_count = $3,
+           status = CASE WHEN status = 'disconnected' THEN 'in_progress' ELSE status END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [player.attemptDbId, player.correctCount, player.answeredQuestions.length],
+    );
+  } catch (err) {
+    console.error("Ошибка сохранения ответа в live-результаты:", err.message);
+  }
+}
+
+function mapAttemptRow(row, rank) {
+  return {
+    rank,
+    id: row.id,
+    quizDbId: Number(row.quiz_id),
+    runId: row.run_id,
+    quizName: row.quiz_name,
+    playerName: row.player_name,
+    name: row.player_name,
+    status: row.status,
+    correctCount: Number(row.correct_count || 0),
+    answeredCount: Number(row.answered_count || 0),
+    totalQuestions: Number(row.total_questions || 0),
+    percentage:
+      Number(row.total_questions || 0) > 0
+        ? Math.round(
+            (Number(row.correct_count || 0) / Number(row.total_questions)) *
+              100,
+          )
+        : 0,
+    elapsedMs: row.elapsed_ms == null ? null : Number(row.elapsed_ms),
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function getAttemptStandingsFromDb({ quizDbId, runId, limit = 500 }) {
+  if (!pool) {
+    return { rows: [], quizName: null, runId: runId || null };
+  }
+
+  let effectiveRunId = runId || null;
+  if (!effectiveRunId) {
+    const latest = await pool.query(
+      `SELECT run_id
+       FROM quiz_attempts
+       WHERE quiz_id = $1
+       ORDER BY started_at DESC, id DESC
+       LIMIT 1`,
+      [quizDbId],
+    );
+    effectiveRunId = latest.rows[0]?.run_id || null;
+  }
+
+  if (!effectiveRunId) {
+    const quizRow = await pool.query(`SELECT name FROM quizzes WHERE id = $1`, [
+      quizDbId,
+    ]);
+    return {
+      rows: [],
+      quizName: quizRow.rows[0]?.name || null,
+      runId: null,
+    };
+  }
+
+  const res = await pool.query(
+    `SELECT a.id, a.quiz_id, a.run_id, q.name AS quiz_name, a.player_name,
+            a.status, a.correct_count, a.answered_count, a.total_questions,
+            a.started_at, a.completed_at, a.elapsed_ms, a.updated_at
+     FROM quiz_attempts a
+     INNER JOIN quizzes q ON q.id = a.quiz_id
+     WHERE a.quiz_id = $1 AND a.run_id = $2
+     ORDER BY a.correct_count DESC,
+              CASE WHEN a.status = 'completed' THEN 0 ELSE 1 END ASC,
+              a.elapsed_ms ASC NULLS LAST,
+              lower(a.player_name) ASC,
+              a.id ASC
+     LIMIT $3`,
+    [quizDbId, effectiveRunId, limit],
+  );
+
+  return {
+    rows: res.rows.map((row, idx) => mapAttemptRow(row, idx + 1)),
+    quizName: res.rows[0]?.quiz_name || null,
+    runId: effectiveRunId,
+  };
+}
+
+function buildResultsWorkbook(rows) {
+  const sheetRows = rows.map((r) => ({
+    "Место": r.rank,
+    "Игрок": r.playerName || r.name || "",
+    "Правильно": r.correctCount ?? 0,
+    "Отвечено": r.answeredCount ?? 0,
+    "Всего вопросов": r.totalQuestions ?? 0,
+    "Время выполнения": formatDurationMs(r.elapsedMs),
+    "Статус": r.status || "",
+    "Дата старта": toIsoOrEmpty(r.startedAt),
+    "Дата завершения": toIsoOrEmpty(r.completedAt),
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(sheetRows);
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 32 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 15 },
+    { wch: 18 },
+    { wch: 15 },
+    { wch: 24 },
+    { wch: 24 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Результаты");
+  return XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
 }
 
 /**
@@ -404,7 +781,11 @@ function sendRestoredPlayerState(socketId, player, quizId, quiz) {
       totalQuestions: quiz.questions.length,
       text: question.text,
       type: question.type,
-      options: question.options,
+      options: getQuestionDisplayOptions(
+        player,
+        question,
+        player.currentQuestion.originalIndex,
+      ),
       image: question.image,
       timeLeft: timeLeft,
     });
@@ -412,11 +793,11 @@ function sendRestoredPlayerState(socketId, player, quizId, quiz) {
     // Игрок уже ответил на вопросы
     if (player.answeredQuestions.length >= quiz.questions.length) {
       io.to(socketId).emit("player-quiz-ended", {
-        score: player.score,
+        correctCount: player.correctCount || 0,
         totalQuestions: quiz.questions.length,
         answeredCount: player.answeredQuestions.length,
         percentage: Math.round(
-          (player.score / quiz.questions.length) * 100,
+          ((player.correctCount || 0) / quiz.questions.length) * 100,
         ),
       });
     }
@@ -438,22 +819,41 @@ io.on("connection", (socket) => {
 
   socket.on("admin-login", (data, callback) => {
     if (!checkSocketRateLimit(socket)) return;
-    const login = sanitizeInput(data.login, 100);
-    const password = data.password; // не санитизируем пароль
+    const tokenSession = restoreAdminSession(socket, data?.token);
+    if (tokenSession) {
+      callback({
+        success: true,
+        token: tokenSession.token,
+        expiresAt: tokenSession.expiresAt,
+      });
+      return;
+    }
+
+    const login = sanitizeInput(data?.login, 100);
+    const password = data?.password; // не санитизируем пароль
     if (
       login === ADMIN_CREDENTIALS.login &&
       password === ADMIN_CREDENTIALS.password
     ) {
-      adminSessions[socket.id] = true;
-      callback({ success: true });
+      const session = createAdminSession(socket);
+      callback({
+        success: true,
+        token: session.token,
+        expiresAt: session.expiresAt,
+      });
       console.log("Админ авторизован");
     } else {
       callback({ success: false, error: "Неверный логин или пароль" });
     }
   });
 
+  socket.on("admin-logout", (callback) => {
+    clearAdminSession(socket);
+    if (typeof callback === "function") callback({ success: true });
+  });
+
   socket.on("get-quizzes", () => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
     socket.emit(
       "quizzes-list",
       quizzes.map((q) => ({
@@ -467,7 +867,7 @@ io.on("connection", (socket) => {
   // Создать викторину
   socket.on("create-quiz", async (data) => {
     if (!checkSocketRateLimit(socket)) return;
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const quizName = sanitizeInput(data?.name, 200) || "Новая викторина";
 
@@ -517,7 +917,7 @@ io.on("connection", (socket) => {
 
   // Добавить вопрос
   socket.on("add-question", async (data) => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz) return;
@@ -559,8 +959,8 @@ io.on("connection", (socket) => {
     if (pool && quiz.dbId) {
       try {
         const orderIndex = quiz.questions.length;
-        await pool.query(
-          "INSERT INTO questions (quiz_id, text, type, options, correct, image, time_limit, order_index) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        const inserted = await pool.query(
+          "INSERT INTO questions (quiz_id, text, type, options, correct, image, time_limit, order_index) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
           [
             quiz.dbId,
             sanitizedText,
@@ -572,6 +972,7 @@ io.on("connection", (socket) => {
             orderIndex,
           ],
         );
+        questionData.id = inserted.rows[0]?.id;
         questionData.orderIndex = orderIndex;
       } catch (err) {
         console.error("Ошибка добавления вопроса:", err.message);
@@ -599,7 +1000,7 @@ io.on("connection", (socket) => {
 
   // Удалить вопрос
   socket.on("delete-question", async (data) => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz || !quiz.questions[data.questionIndex]) return;
@@ -629,7 +1030,7 @@ io.on("connection", (socket) => {
 
   // Обновить вопрос
   socket.on("update-question", async (data) => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const quiz = quizzes.find((q) => q.id === data.quizId);
     if (!quiz || !quiz.questions[data.questionIndex]) return;
@@ -650,6 +1051,7 @@ io.on("connection", (socket) => {
       : data.options;
 
     const questionData = {
+      id: quiz.questions[data.questionIndex].id,
       text: sanitizedText,
       type: data.type || "multiple_choice",
       options: sanitizedOptions,
@@ -657,6 +1059,7 @@ io.on("connection", (socket) => {
       image: data.image || null,
       timeLimit: data.timeLimit || QUESTION_TIME,
       answerType: data.answerType || "single",
+      orderIndex: quiz.questions[data.questionIndex].orderIndex,
     };
 
     if (pool && quiz.dbId) {
@@ -698,7 +1101,7 @@ io.on("connection", (socket) => {
 
   // Удалить викторину
   socket.on("delete-quiz", async (quizId) => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const quizIndex = quizzes.findIndex((q) => q.id === quizId);
     if (quizIndex === -1) return;
@@ -722,13 +1125,15 @@ io.on("connection", (socket) => {
 
   // Выбрать викторину
   socket.on("select-quiz", (quizId) => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const quiz = quizzes.find((q) => q.id === quizId);
     if (!quiz) return;
 
     currentQuizId = quizId;
     quizStarted = false;
+    quizFinished = false;
+    currentRunId = null;
 
     for (const id in players) {
       initPlayerQuestions(id, quiz);
@@ -744,11 +1149,16 @@ io.on("connection", (socket) => {
   });
 
   // Остановка викторины
-  socket.on("stop-quiz", () => {
-    if (!adminSessions[socket.id]) return;
+  socket.on("stop-quiz", async () => {
+    if (!ensureAdminSession(socket)) return;
+
+    await Promise.all(
+      Object.values(players).map((player) => markAttemptStatus(player, "stopped")),
+    );
 
     // Сбрасываем состояние
     currentQuizId = null;
+    currentRunId = null;
     quizStarted = false;
     quizFinished = false;
 
@@ -762,15 +1172,20 @@ io.on("connection", (socket) => {
   });
 
   // Перезапуск викторины (даже если есть игроки)
-  socket.on("restart-quiz", () => {
-    if (!adminSessions[socket.id]) return;
+  socket.on("restart-quiz", async () => {
+    if (!ensureAdminSession(socket)) return;
     if (!currentQuizId) return;
 
     const quiz = quizzes.find((q) => q.id === currentQuizId);
     if (!quiz) return;
 
+    await Promise.all(
+      Object.values(players).map((player) => markAttemptStatus(player, "stopped")),
+    );
+
     quizStarted = false;
     quizFinished = false;
+    currentRunId = null;
 
     // Сброс всех игроков
     for (const id in players) {
@@ -787,7 +1202,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("get-quiz-questions", (quizId) => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
     const quiz = quizzes.find((q) => q.id === quizId);
     if (!quiz) return;
     socket.emit("quiz-questions", { quizId, questions: quiz.questions });
@@ -795,7 +1210,7 @@ io.on("connection", (socket) => {
 
   // Получить текущее состояние игры
   socket.on("get-game-state", () => {
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     let gameState = {
       currentQuizId: currentQuizId,
@@ -803,6 +1218,7 @@ io.on("connection", (socket) => {
       quizFinished: quizFinished,
       quizName: null,
       questionsCount: 0,
+      runId: currentRunId,
     };
 
     if (currentQuizId) {
@@ -818,6 +1234,7 @@ io.on("connection", (socket) => {
     // Отправляем текущий лидерборд и количество игроков онлайн
     const leaderboard = getLeaderboard();
     socket.emit("update-leaderboard", leaderboard);
+    socket.emit("live-standings", leaderboard);
 
     // Считаем только онлайн игроков (не отключившихся)
     const onlineCount = Object.values(players).filter(
@@ -826,10 +1243,67 @@ io.on("connection", (socket) => {
     socket.emit("players-count", { count: onlineCount });
   });
 
-  // История результатов (таблица quiz_results)
+  socket.on("get-live-standings", () => {
+    if (!ensureAdminSession(socket)) return;
+    socket.emit("live-standings", getLeaderboard());
+  });
+
+  socket.on("download-results-xlsx", async (payload) => {
+    if (!checkSocketRateLimit(socket)) return;
+    if (!ensureAdminSession(socket)) return;
+
+    const raw =
+      payload != null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload
+        : {};
+    const quizDbId = Number(raw.quizDbId);
+    const runId =
+      typeof raw.runId === "string" && raw.runId.trim()
+        ? raw.runId.trim()
+        : null;
+
+    if (!pool) {
+      socket.emit("quiz-results-xlsx", {
+        error: "База данных не подключена.",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(quizDbId) || quizDbId <= 0) {
+      socket.emit("quiz-results-xlsx", {
+        error: "Некорректный идентификатор викторины.",
+      });
+      return;
+    }
+
+    try {
+      const data = await getAttemptStandingsFromDb({ quizDbId, runId });
+      if (data.rows.length === 0) {
+        socket.emit("quiz-results-xlsx", {
+          error: "Нет данных для выгрузки.",
+        });
+        return;
+      }
+
+      const buffer = buildResultsWorkbook(data.rows);
+      const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+      const label = sanitizeFilenamePart(data.quizName || `quiz_${quizDbId}`);
+      socket.emit("quiz-results-xlsx", {
+        filename: `results_${label}_${stamp}.xlsx`,
+        base64: buffer.toString("base64"),
+      });
+    } catch (err) {
+      console.error("Ошибка XLSX-выгрузки:", err.message);
+      socket.emit("quiz-results-xlsx", {
+        error: "Не удалось сформировать XLSX: " + err.message,
+      });
+    }
+  });
+
+  // История результатов (live-таблица quiz_attempts)
   socket.on("get-results-quizzes", async () => {
     if (!checkSocketRateLimit(socket)) return;
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     if (!pool) {
       socket.emit("results-quizzes", {
@@ -842,21 +1316,24 @@ io.on("connection", (socket) => {
 
     try {
       const res = await pool.query(
-        `SELECT r.quiz_id, q.name AS quiz_name,
+        `SELECT a.quiz_id, a.run_id, q.name AS quiz_name,
                 COUNT(*)::int AS attempts,
-                MAX(r.finished_at) AS last_finished_at
-         FROM quiz_results r
-         INNER JOIN quizzes q ON q.id = r.quiz_id
-         GROUP BY r.quiz_id, q.name
-         ORDER BY last_finished_at DESC
+                MIN(a.started_at) AS started_at,
+                MAX(COALESCE(a.completed_at, a.updated_at, a.started_at)) AS last_finished_at
+         FROM quiz_attempts a
+         INNER JOIN quizzes q ON q.id = a.quiz_id
+         GROUP BY a.quiz_id, a.run_id, q.name
+         ORDER BY started_at DESC
          LIMIT 200`,
       );
 
       socket.emit("results-quizzes", {
         quizzes: res.rows.map((row) => ({
           quizDbId: Number(row.quiz_id),
+          runId: row.run_id,
           quizName: row.quiz_name,
           attempts: Number(row.attempts || 0),
+          startedAt: row.started_at,
           lastFinishedAt: row.last_finished_at,
         })),
       });
@@ -871,13 +1348,17 @@ io.on("connection", (socket) => {
 
   socket.on("get-quiz-results-by-db", async (payload) => {
     if (!checkSocketRateLimit(socket)) return;
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const raw =
       payload != null && typeof payload === "object" && !Array.isArray(payload)
         ? payload
         : {};
     const quizDbId = Number(raw.quizDbId);
+    const runId =
+      typeof raw.runId === "string" && raw.runId.trim()
+        ? raw.runId.trim()
+        : null;
 
     if (!pool) {
       socket.emit("quiz-results", {
@@ -901,34 +1382,14 @@ io.on("connection", (socket) => {
     }
 
     try {
-      const quizRow = await pool.query(
-        `SELECT id, name FROM quizzes WHERE id = $1`,
-        [quizDbId],
-      );
-      const quizName = quizRow.rows[0]?.name || null;
-
-      const res = await pool.query(
-        `SELECT r.id, r.player_name, r.score, r.total_questions, r.answered_count, r.percentage, r.finished_at
-         FROM quiz_results r
-         WHERE r.quiz_id = $1
-         ORDER BY r.score DESC, r.percentage DESC NULLS LAST, r.finished_at DESC
-         LIMIT 500`,
-        [quizDbId],
-      );
+      const standings = await getAttemptStandingsFromDb({ quizDbId, runId });
 
       socket.emit("quiz-results", {
-        results: res.rows.map((row) => ({
-          id: row.id,
-          playerName: row.player_name,
-          score: Number(row.score),
-          totalQuestions: row.total_questions,
-          answeredCount: row.answered_count,
-          percentage: row.percentage,
-          finishedAt: row.finished_at,
-        })),
+        results: standings.rows,
         mode: "quiz",
         quizDbId,
-        quizName,
+        runId: standings.runId,
+        quizName: standings.quizName,
       });
     } catch (err) {
       console.error("Ошибка загрузки результатов викторины:", err.message);
@@ -937,19 +1398,24 @@ io.on("connection", (socket) => {
         results: [],
         mode: "quiz",
         quizDbId,
+        runId,
       });
     }
   });
 
   socket.on("delete-quiz-results-by-db", async (payload) => {
     if (!checkSocketRateLimit(socket)) return;
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const raw =
       payload != null && typeof payload === "object" && !Array.isArray(payload)
         ? payload
         : {};
     const quizDbId = Number(raw.quizDbId);
+    const runId =
+      typeof raw.runId === "string" && raw.runId.trim()
+        ? raw.runId.trim()
+        : null;
 
     if (!pool) {
       socket.emit("quiz-results-deleted", {
@@ -966,11 +1432,17 @@ io.on("connection", (socket) => {
     }
 
     try {
-      const del = await pool.query(`DELETE FROM quiz_results WHERE quiz_id = $1`, [
-        quizDbId,
-      ]);
+      const del = runId
+        ? await pool.query(
+            `DELETE FROM quiz_attempts WHERE quiz_id = $1 AND run_id = $2`,
+            [quizDbId, runId],
+          )
+        : await pool.query(`DELETE FROM quiz_attempts WHERE quiz_id = $1`, [
+            quizDbId,
+          ]);
       socket.emit("quiz-results-deleted", {
         quizDbId,
+        runId,
         deletedCount: del.rowCount || 0,
         message: `Удалено прохождений: ${del.rowCount || 0}`,
       });
@@ -984,7 +1456,7 @@ io.on("connection", (socket) => {
 
   socket.on("get-quiz-results", async (payload) => {
     if (!checkSocketRateLimit(socket)) return;
-    if (!adminSessions[socket.id]) return;
+    if (!ensureAdminSession(socket)) return;
 
     const raw =
       payload != null && typeof payload === "object" && !Array.isArray(payload)
@@ -1011,25 +1483,16 @@ io.on("connection", (socket) => {
     try {
       if (!quizId) {
         const res = await pool.query(
-          `SELECT r.id, r.quiz_id, q.name AS quiz_name, r.player_name, r.score,
-                  r.total_questions, r.answered_count, r.percentage, r.finished_at
-           FROM quiz_results r
-           INNER JOIN quizzes q ON q.id = r.quiz_id
-           ORDER BY r.finished_at DESC
+          `SELECT a.id, a.quiz_id, a.run_id, q.name AS quiz_name, a.player_name,
+                  a.status, a.correct_count, a.answered_count, a.total_questions,
+                  a.started_at, a.completed_at, a.elapsed_ms, a.updated_at
+           FROM quiz_attempts a
+           INNER JOIN quizzes q ON q.id = a.quiz_id
+           ORDER BY a.started_at DESC, a.id DESC
            LIMIT 200`,
         );
         socket.emit("quiz-results", {
-          results: res.rows.map((row) => ({
-            id: row.id,
-            quizId: row.quiz_id,
-            quizName: row.quiz_name,
-            playerName: row.player_name,
-            score: Number(row.score),
-            totalQuestions: row.total_questions,
-            answeredCount: row.answered_count,
-            percentage: row.percentage,
-            finishedAt: row.finished_at,
-          })),
+          results: res.rows.map((row, idx) => mapAttemptRow(row, idx + 1)),
           mode: "all",
           quizId: null,
         });
@@ -1049,26 +1512,12 @@ io.on("connection", (socket) => {
         return;
       }
 
-      const res = await pool.query(
-        `SELECT r.id, r.player_name, r.score, r.total_questions, r.answered_count, r.percentage, r.finished_at
-         FROM quiz_results r
-         WHERE r.quiz_id = $1
-         ORDER BY r.finished_at DESC
-         LIMIT 500`,
-        [quiz.dbId],
-      );
+      const standings = await getAttemptStandingsFromDb({ quizDbId: quiz.dbId });
       socket.emit("quiz-results", {
-        results: res.rows.map((row) => ({
-          id: row.id,
-          playerName: row.player_name,
-          score: Number(row.score),
-          totalQuestions: row.total_questions,
-          answeredCount: row.answered_count,
-          percentage: row.percentage,
-          finishedAt: row.finished_at,
-        })),
+        results: standings.rows,
         mode: "quiz",
         quizId,
+        runId: standings.runId,
         quizName: quiz.name,
       });
     } catch (err) {
@@ -1083,8 +1532,8 @@ io.on("connection", (socket) => {
   });
 
   // Старт викторины
-  socket.on("start-quiz", () => {
-    if (!adminSessions[socket.id]) return;
+  socket.on("start-quiz", async () => {
+    if (!ensureAdminSession(socket)) return;
     if (!currentQuizId) return;
 
     const quiz = quizzes.find((q) => q.id === currentQuizId);
@@ -1092,11 +1541,17 @@ io.on("connection", (socket) => {
 
     quizStarted = true;
     quizFinished = false;
+    currentRunId = generateRunId();
 
     for (const id in players) {
+      initPlayerQuestions(id, quiz);
+      players[id].startedAtMs = Date.now();
+      players[id].status = "in_progress";
+      await createAttemptForPlayer(id, players[id], quiz);
       sendNextQuestionToPlayer(id, quiz);
     }
 
+    broadcastLeaderboard();
     console.log("Викторина запущена");
   });
 
@@ -1106,7 +1561,7 @@ io.on("connection", (socket) => {
     if (!checkSocketRateLimit(socket)) return;
 
     const rawName = typeof data === "string" ? data : data.name;
-    const name = sanitizeInput(rawName, 50);
+    const name = sanitizeInput(rawName, 500);
     const savedId = typeof data === "object" ? data.savedId : null;
 
     if (!name) {
@@ -1125,6 +1580,9 @@ io.on("connection", (socket) => {
         const player = players[savedId];
         players[socket.id] = player;
         player.disconnected = false;
+        if (quizStarted && player.attemptDbId) {
+          void markAttemptStatus(player, "in_progress");
+        }
         delete players[savedId];
 
         console.log(
@@ -1148,6 +1606,9 @@ io.on("connection", (socket) => {
         const [oldId, player] = disconnectedPlayer;
         players[socket.id] = player;
         player.disconnected = false;
+        if (quizStarted && player.attemptDbId) {
+          void markAttemptStatus(player, "in_progress");
+        }
         delete players[oldId];
 
         console.log(
@@ -1179,6 +1640,9 @@ io.on("connection", (socket) => {
       // Перепривязываем к новому сокету
       players[socket.id] = player;
       player.disconnected = false;
+      if (quizStarted && player.attemptDbId) {
+        void markAttemptStatus(player, "in_progress");
+      }
       delete players[oldId];
 
       console.log(
@@ -1203,15 +1667,7 @@ io.on("connection", (socket) => {
     }
 
     // Новый игрок
-    players[socket.id] = {
-      name,
-      score: 0,
-      questionsQueue: [],
-      currentQuestion: null,
-      answeredQuestions: [],
-      questionStartTime: null,
-      quizCompletionHandled: false,
-    };
+    players[socket.id] = createPlayerState(name, socket.id);
     console.log(`Игрок зарегистрирован: ${name}`);
     socket.emit("registered", { playerId: socket.id, name, restored: false });
 
@@ -1223,7 +1679,7 @@ io.on("connection", (socket) => {
     broadcastLeaderboard();
   });
 
-  socket.on("submit-answer", (answerData) => {
+  socket.on("submit-answer", async (answerData) => {
     const player = players[socket.id];
     if (!player || !currentQuizId) return;
     if (!player.currentQuestion) return;
@@ -1239,16 +1695,28 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const question = quiz.questions[player.currentQuestion.originalIndex];
+    const originalQuestionIndex = player.currentQuestion.originalIndex;
+    const question = quiz.questions[originalQuestionIndex];
     const timeLimitSec = question.timeLimit || QUESTION_TIME;
     const elapsedSec =
       player.questionStartTime != null
         ? (Date.now() - player.questionStartTime) / 1000
         : 0;
+    const elapsedMs = elapsedSec * 1000;
     // Небольшой запас на сетевую задержку/таймер клиента
     const graceSec = 0.75;
     if (elapsedSec > timeLimitSec + graceSec) {
-      player.answeredQuestions.push(player.currentQuestion.originalIndex);
+      player.answeredQuestions.push(originalQuestionIndex);
+      await createAttemptForPlayer(socket.id, player, quiz);
+      await recordAttemptAnswer({
+        quiz,
+        player,
+        question,
+        questionIndex: originalQuestionIndex,
+        answerPayload: { type: "time_up", answer: null },
+        pointsEarned: 0,
+        elapsedMs,
+      });
       player.isProcessingAnswer = false;
       broadcastLeaderboard();
       setTimeout(() => {
@@ -1260,6 +1728,7 @@ io.on("connection", (socket) => {
     // Подсчёт баллов: максимум 1 балл за вопрос
     let pointsEarned = 0;
     const qType = question.type;
+    let answerPayload = { type: qType, answer: answerData };
 
     if (qType === "ordering") {
       if (
@@ -1268,6 +1737,7 @@ io.on("connection", (socket) => {
         answerData.type === "ordering"
       ) {
         const userOrder = answerData.answer;
+        answerPayload = { type: "ordering", answer: userOrder };
         const expected = question.correct;
         const n = Array.isArray(expected) ? expected.length : 0;
         const isValid =
@@ -1288,6 +1758,7 @@ io.on("connection", (socket) => {
         answerData.type === "matching"
       ) {
         const pairs = answerData.pairs;
+        answerPayload = { type: "matching", pairs };
         if (!Array.isArray(pairs)) {
           pointsEarned = 0;
         } else {
@@ -1348,6 +1819,10 @@ io.on("connection", (socket) => {
         const userAnswer = sanitizeInput(answerData.answer, 500)
           .toLowerCase()
           .trim();
+        answerPayload = {
+          type: "text",
+          answer: sanitizeInput(answerData.answer, 500),
+        };
         const correctOption = question.options[0];
         const correctAnswer =
           typeof correctOption === "object"
@@ -1358,19 +1833,31 @@ io.on("connection", (socket) => {
       }
     } else if (qType === "multiple_choice" || qType === "true_false") {
       const correctAnswers = question.correct || [];
-      const optCount = Array.isArray(question.options)
-        ? question.options.length
-        : 0;
+      const displayToOriginal =
+        qType === "multiple_choice" && Array.isArray(player.answerOptionMaps?.[originalQuestionIndex])
+          ? player.answerOptionMaps[originalQuestionIndex]
+          : Array.isArray(question.options)
+            ? question.options.map((_, index) => index)
+            : [];
+      const optCount = displayToOriginal.length;
 
       if (Array.isArray(answerData)) {
         if (correctAnswers.length <= 1) {
           pointsEarned = 0;
         } else {
-          const userAnswers = answerData;
+          const displayedAnswers = answerData;
           const validIndices =
-            userAnswers.every(
+            displayedAnswers.every(
               (a) => Number.isInteger(a) && a >= 0 && a < optCount,
-            ) && new Set(userAnswers).size === userAnswers.length;
+            ) && new Set(displayedAnswers).size === displayedAnswers.length;
+          const userAnswers = validIndices
+            ? displayedAnswers.map((idx) => displayToOriginal[idx])
+            : [];
+          answerPayload = {
+            type: qType,
+            displayedAnswer: displayedAnswers,
+            originalAnswer: userAnswers,
+          };
 
           if (!validIndices || correctAnswers.length === 0) {
             pointsEarned = 0;
@@ -1388,11 +1875,22 @@ io.on("connection", (socket) => {
           }
         }
       } else {
-        const idx = Number(answerData);
+        const displayedIdx = Number(answerData);
+        const idx =
+          Number.isInteger(displayedIdx) &&
+          displayedIdx >= 0 &&
+          displayedIdx < optCount
+            ? displayToOriginal[displayedIdx]
+            : NaN;
+        answerPayload = {
+          type: qType,
+          displayedAnswer: Number.isInteger(displayedIdx)
+            ? displayedIdx
+            : answerData,
+          originalAnswer: idx,
+        };
         if (
           Number.isInteger(idx) &&
-          idx >= 0 &&
-          idx < optCount &&
           correctAnswers.length <= 1
         ) {
           pointsEarned = question.correct.includes(idx) ? 1 : 0;
@@ -1404,14 +1902,28 @@ io.on("connection", (socket) => {
 
     // Начисляем баллы (максимум 1 за вопрос)
     player.score += pointsEarned;
+    const isFullyCorrect = pointsEarned >= 1;
+    if (isFullyCorrect) {
+      player.correctCount = (player.correctCount || 0) + 1;
+    }
 
-    if (pointsEarned > 0) {
+    if (isFullyCorrect) {
       console.log(
-        `Игрок ${player.name} ответил правильно! +${pointsEarned.toFixed(2)} баллов`,
+        `Игрок ${player.name} ответил правильно!`,
       );
     }
 
-    player.answeredQuestions.push(player.currentQuestion.originalIndex);
+    player.answeredQuestions.push(originalQuestionIndex);
+    await createAttemptForPlayer(socket.id, player, quiz);
+    await recordAttemptAnswer({
+      quiz,
+      player,
+      question,
+      questionIndex: originalQuestionIndex,
+      answerPayload,
+      pointsEarned,
+      elapsedMs,
+    });
     player.isProcessingAnswer = false; // Reset guard
     broadcastLeaderboard();
 
@@ -1428,7 +1940,7 @@ io.on("connection", (socket) => {
     sendNextQuestionToPlayer(socket.id, quiz);
   });
 
-  socket.on("time-up", () => {
+  socket.on("time-up", async () => {
     const player = players[socket.id];
     if (!player || !currentQuizId) return;
     const quiz = quizzes.find((q) => q.id === currentQuizId);
@@ -1450,13 +1962,21 @@ io.on("connection", (socket) => {
       if (elapsedSec + graceSec < timeLimitSec) {
         return;
       }
-      player.answeredQuestions.push(player.currentQuestion.originalIndex);
+      const originalQuestionIndex = player.currentQuestion.originalIndex;
+      player.answeredQuestions.push(originalQuestionIndex);
+      await createAttemptForPlayer(socket.id, player, quiz);
+      await recordAttemptAnswer({
+        quiz,
+        player,
+        question,
+        questionIndex: originalQuestionIndex,
+        answerPayload: { type: "time_up", answer: null },
+        pointsEarned: 0,
+        elapsedMs: elapsedSec * 1000,
+      });
+      broadcastLeaderboard();
     }
     sendNextQuestionToPlayer(socket.id, quiz);
-  });
-
-  socket.on("get-final-leaderboard", () => {
-    socket.emit("final-leaderboard", getLeaderboard());
   });
 
   socket.on("disconnect", () => {
@@ -1467,11 +1987,15 @@ io.on("connection", (socket) => {
       // и дать время на восстановление сессии
       player.disconnected = true;
       player.lastSocketId = socket.id;
+      if (quizStarted && player.status !== "completed") {
+        void markAttemptStatus(player, "disconnected");
+      }
       broadcastLeaderboard();
 
-      // Автоматически удаляем игрока через 60 секунд если не восстановился
+      // До старта можно чистить RAM, но после старта держим до stop/restart,
+      // чтобы отключившийся игрок не пропал из live-итогов.
       setTimeout(() => {
-        if (player.disconnected && players[socket.id]) {
+        if (!quizStarted && player.disconnected && players[socket.id]) {
           delete players[socket.id];
           console.log(`Игрок удалён после таймаута: ${player.name}`);
           broadcastLeaderboard();
@@ -1493,8 +2017,15 @@ function initPlayerQuestions(playerId, quiz) {
   players[playerId].answeredQuestions = [];
   players[playerId].currentQuestion = null;
   players[playerId].score = 0;
+  players[playerId].correctCount = 0;
   players[playerId].isProcessingAnswer = false;
   players[playerId].quizCompletionHandled = false;
+  players[playerId].attemptDbId = null;
+  players[playerId].startedAtMs = null;
+  players[playerId].completedAtMs = null;
+  players[playerId].elapsedMs = null;
+  players[playerId].status = "waiting";
+  players[playerId].answerOptionMaps = {};
 }
 
 function sendNextQuestionToPlayer(playerId, quiz) {
@@ -1509,20 +2040,23 @@ function sendNextQuestionToPlayer(playerId, quiz) {
     if (player.quizCompletionHandled) return;
     player.quizCompletionHandled = true;
 
-    const playerScore = player.score;
     const totalQuestions = quiz.questions.length;
     const answeredCount = player.answeredQuestions.length;
-    // Процент от набранных баллов к максимальным
+    const correctCount = player.correctCount || 0;
     const percentage =
-      totalQuestions > 0 ? Math.round((playerScore / totalQuestions) * 100) : 0;
+      totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+
+    player.status = "completed";
+    player.completedAtMs = Date.now();
+    player.elapsedMs = getElapsedMs(player);
+    void markAttemptStatus(player, "completed");
 
     const endPayload = {
-      score: playerScore,
+      correctCount,
       totalQuestions,
       answeredCount,
       percentage,
     };
-    void saveQuizResultToDb(quiz, player, endPayload);
 
     io.to(playerId).emit("player-quiz-ended", endPayload);
 
@@ -1543,25 +2077,38 @@ function sendNextQuestionToPlayer(playerId, quiz) {
     totalQuestions: quiz.questions.length,
     text: question.text,
     type: question.type,
-    options: question.options,
+    options: prepareQuestionDisplayOptions(player, question, nextIndex),
     image: question.image,
     timeLeft: question.timeLimit || QUESTION_TIME,
   });
 }
 
 function getLeaderboard() {
-  return Object.entries(players)
-    .map(([id, data]) => ({
+  const rows = Object.entries(players).map(([id, data]) => ({
+      id,
       name: data.name,
       score: data.score,
+      correctCount: data.correctCount || 0,
       answered: data.answeredQuestions.length,
+      answeredCount: data.answeredQuestions.length,
       totalQuestions: data.questionsQueue.length,
       percentage:
         data.questionsQueue.length > 0
-          ? Math.round((data.score / data.questionsQueue.length) * 100)
+          ? Math.round(
+              ((data.correctCount || 0) / data.questionsQueue.length) * 100,
+            )
           : 0,
-    }))
-    .sort((a, b) => b.score - a.score);
+      status:
+        data.disconnected && data.status !== "completed"
+          ? "disconnected"
+          : data.status || "waiting",
+      elapsedMs: getElapsedMs(data),
+    }));
+
+  return sortStandingsRows(rows).map((row, index) => ({
+    ...row,
+    rank: index + 1,
+  }));
 }
 
 // Проверка: все ли игроки завершили викторину
@@ -1574,13 +2121,15 @@ function checkAllPlayersFinished(quiz) {
       p.disconnected || p.answeredQuestions.length >= quiz.questions.length,
   );
 
-  if (allFinished) {
+  if (allFinished && !quizFinished) {
     quizFinished = true;
     // Отправляем админу уведомление и результаты
     const leaderboard = getLeaderboard();
     io.emit("all-players-finished", {
       leaderboard,
       totalQuestions: quiz.questions.length,
+      runId: currentRunId,
+      quizDbId: quiz.dbId || null,
     });
     console.log("Все игроки завершили викторину!");
   }
@@ -1590,6 +2139,7 @@ function checkAllPlayersFinished(quiz) {
 function broadcastLeaderboard() {
   const leaderboard = getLeaderboard();
   io.emit("update-leaderboard", leaderboard);
+  io.emit("live-standings", leaderboard);
   // Считаем только онлайн игроков (не отключившихся)
   const onlineCount = Object.values(players).filter(
     (p) => !p.disconnected,

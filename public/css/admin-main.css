@@ -12,6 +12,10 @@ nav {
   margin: 0 auto 2rem;
 }
 
+nav .btn {
+  width: auto;
+}
+
 .container {
   max-width: 1000px;
   margin: 0 auto;

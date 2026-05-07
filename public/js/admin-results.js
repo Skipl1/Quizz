@@ -1,130 +1,13 @@
 /**
- * admin-results.js — вкладка «Результаты»: загрузка истории из БД
+ * admin-results.js — вкладка «Результаты»: live-история из БД и XLSX
  */
 
-/** @type {object|null} Последний ответ сервера для выгрузки в CSV */
 window.__lastQuizResultsPayload = null;
 
-/** @type {number|null} Выбранная викторина (DB id) */
 let selectedResultsQuizDbId = null;
-
-/** @type {string} Выбранное название викторины */
+let selectedResultsRunId = "";
 let selectedResultsQuizName = "";
 
-/** @type {number|null} Если не null — после загрузки авто-скачать CSV */
-let pendingCsvDownloadQuizDbId = null;
-
-/**
- * Экранирование значения для CSV (RFC-стиль).
- * @param {unknown} val
- */
-function csvEscapeCell(val) {
-  const s = val == null ? "" : String(val);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-/**
- * Имя файла без недопустимых символов.
- * @param {string} base
- */
-function sanitizeCsvFilename(base) {
-  return base.replace(/[/\\?%*:|"<>]/g, "_").slice(0, 120) || "export";
-}
-
-/**
- * Скачивает текущую таблицу истории результатов в CSV (UTF-8 с BOM).
- */
-function downloadQuizHistoryCsv() {
-  const data = window.__lastQuizResultsPayload;
-  if (!data || !Array.isArray(data.results) || data.results.length === 0) {
-    alert(
-      "Нет данных для выгрузки. Откройте вкладку «Результаты», нажмите «Обновить» или смените викторину.",
-    );
-    return;
-  }
-
-  const mode = data.mode || (data.quizId ? "quiz" : "all");
-  const showQuizCol = mode === "all";
-
-  const header = showQuizCol
-    ? [
-        "Викторина",
-        "Игрок",
-        "Баллы",
-        "Вопросов",
-        "Отвечено",
-        "Процент",
-        "Дата (локаль)",
-        "Дата (ISO)",
-      ]
-    : [
-        "Игрок",
-        "Баллы",
-        "Вопросов",
-        "Отвечено",
-        "Процент",
-        "Дата (локаль)",
-        "Дата (ISO)",
-      ];
-
-  const lines = [header.map(csvEscapeCell).join(",")];
-
-  for (const r of data.results) {
-    const iso =
-      r.finishedAt != null
-        ? new Date(r.finishedAt).toISOString()
-        : "";
-    const local = formatResultsDate(r.finishedAt);
-    const pct = r.percentage != null ? `${r.percentage}` : "";
-    const row = showQuizCol
-      ? [
-          r.quizName || "",
-          r.playerName || "",
-          typeof r.score === "number" && !Number.isNaN(r.score)
-            ? r.score
-            : "",
-          r.totalQuestions ?? "",
-          r.answeredCount ?? "",
-          pct,
-          local,
-          iso,
-        ]
-      : [
-          r.playerName || "",
-          typeof r.score === "number" && !Number.isNaN(r.score)
-            ? r.score
-            : "",
-          r.totalQuestions ?? "",
-          r.answeredCount ?? "",
-          pct,
-          local,
-          iso,
-        ];
-    lines.push(row.map(csvEscapeCell).join(","));
-  }
-
-  const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
-  let label = "все_викторины";
-  if (mode === "quiz" && data.quizName) {
-    label = sanitizeCsvFilename(data.quizName);
-  }
-  const filename = `results_${label}_${stamp}.csv`;
-
-  const blob = new Blob(["\ufeff" + lines.join("\n")], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-/**
- * Форматирует дату/время для краткого отображения.
- * @param {string|Date} value
- */
 function formatResultsDate(value) {
   if (value == null) return "—";
   const d = value instanceof Date ? value : new Date(value);
@@ -138,21 +21,9 @@ function formatResultsDate(value) {
   });
 }
 
-/**
- * Отображает балл (в т.ч. дробный).
- * @param {number} n
- */
-function formatScore(n) {
-  if (typeof n !== "number" || Number.isNaN(n)) return "—";
-  const s = n.toFixed(2);
-  return s.endsWith(".00") ? String(Math.round(n)) : s.replace(/0+$/, "").replace(/\.$/, "");
-}
-
-/**
- * Запрашивает список викторин, по которым есть прохождения.
- */
 function loadResultsOverview() {
   selectedResultsQuizDbId = null;
+  selectedResultsRunId = "";
   selectedResultsQuizName = "";
   window.__lastQuizResultsPayload = null;
   const wrap = document.getElementById("results-table-wrap");
@@ -160,9 +31,6 @@ function loadResultsOverview() {
   socket.emit("get-results-quizzes");
 }
 
-/**
- * Рендер ответа сервера.
- */
 function renderQuizResultsPayload(data) {
   const errEl = document.getElementById("results-error");
   const wrap = document.getElementById("results-table-wrap");
@@ -172,86 +40,26 @@ function renderQuizResultsPayload(data) {
     data && Array.isArray(data.results) && data.results.length > 0
       ? { ...data, results: data.results.slice() }
       : null;
-  // Автоскачивание CSV по кнопке у конкретной викторины
-  if (
-    pendingCsvDownloadQuizDbId != null &&
-    data &&
-    Number(data.quizDbId) === pendingCsvDownloadQuizDbId
-  ) {
-    pendingCsvDownloadQuizDbId = null;
-    if (window.__lastQuizResultsPayload) {
-      downloadQuizHistoryCsv();
-    } else {
-      alert("Нет данных для выгрузки CSV по этой викторине.");
-    }
-  }
 
   if (errEl) {
     errEl.classList.toggle("hidden", !data.error);
     errEl.textContent = data.error || "";
   }
 
-  const rows = (data.results || []).slice().sort((a, b) => {
-    const as = typeof a.score === "number" && !Number.isNaN(a.score) ? a.score : 0;
-    const bs = typeof b.score === "number" && !Number.isNaN(b.score) ? b.score : 0;
-    if (bs !== as) return bs - as;
-    const ap = typeof a.percentage === "number" && !Number.isNaN(a.percentage) ? a.percentage : 0;
-    const bp = typeof b.percentage === "number" && !Number.isNaN(b.percentage) ? b.percentage : 0;
-    if (bp !== ap) return bp - ap;
-    const at = a.finishedAt ? new Date(a.finishedAt).getTime() : 0;
-    const bt = b.finishedAt ? new Date(b.finishedAt).getTime() : 0;
-    return bt - at;
+  renderStandingsTable(wrap, data.results || [], {
+    showDates: true,
+    emptyText: "Пока нет сохранённых прохождений для этого фильтра.",
   });
-  if (rows.length === 0) {
-    wrap.innerHTML =
-      '<div class="empty-state">Пока нет сохранённых прохождений для этого фильтра.</div>';
-    return;
-  }
-
-  wrap.innerHTML = `
-    <table class="admin-results-table">
-      <thead>
-        <tr>
-          <th class="col-rank">#</th>
-          <th>Игрок</th>
-          <th class="col-num">Баллы</th>
-          <th class="col-num">Вопросов</th>
-          <th class="col-num">Отвечено</th>
-          <th class="col-num">%</th>
-          <th>Дата</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows
-          .map((r, idx) => {
-            const rank = idx + 1;
-            const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
-            const rankLabel = medal || String(rank);
-            const trClass = rank <= 3 ? ` class="rank-top rank-${rank}"` : "";
-            return `<tr${trClass}>
-            <td class="col-rank"><span class="rank-badge">${escapeHtml(rankLabel)}</span></td>
-            <td>${escapeHtml(r.playerName || "")}</td>
-            <td class="col-num">${escapeHtml(String(formatScore(r.score)))}</td>
-            <td class="col-num">${r.totalQuestions ?? "—"}</td>
-            <td class="col-num">${r.answeredCount ?? "—"}</td>
-            <td class="col-num">${r.percentage != null ? `${r.percentage}%` : "—"}</td>
-            <td>${escapeHtml(formatResultsDate(r.finishedAt))}</td>
-          </tr>`;
-          })
-          .join("")}
-      </tbody>
-    </table>
-  `;
 }
 
 socket.on("quiz-results", (data) => {
   renderQuizResultsPayload(data || {});
 });
 
-/**
- * Рендерит список «пройденных викторин».
- * @param {Array<{quizDbId:number, quizName:string, attempts:number, lastFinishedAt:string}>} list
- */
+function encodedArg(value) {
+  return encodeURIComponent(String(value || "")).replace(/'/g, "%27");
+}
+
 function renderCompletedQuizzes(list) {
   const container = document.getElementById("results-quizzes-list");
   if (!container) return;
@@ -264,18 +72,23 @@ function renderCompletedQuizzes(list) {
 
   container.innerHTML = list
     .map((q) => {
-      const isActive = q.quizDbId === selectedResultsQuizDbId;
+      const runId = String(q.runId || "");
+      const isActive =
+        Number(q.quizDbId) === selectedResultsQuizDbId &&
+        runId === selectedResultsRunId;
       const title = escapeHtml(q.quizName || "Викторина");
-      const meta = `${q.attempts || 0} прохожд. • ${escapeHtml(formatResultsDate(q.lastFinishedAt))}`;
+      const meta = `${q.attempts || 0} участн. • старт ${escapeHtml(formatResultsDate(q.startedAt || q.lastFinishedAt))}`;
+      const encodedRunId = encodedArg(runId);
+      const encodedName = encodedArg(q.quizName || "");
       return `
-        <div class="results-quiz-item ${isActive ? "active" : ""}" onclick="selectResultsQuiz(${q.quizDbId}, '${String(q.quizName || "").replace(/'/g, "\\'")}')">
+        <div class="results-quiz-item ${isActive ? "active" : ""}" onclick="selectResultsQuiz(${Number(q.quizDbId)}, decodeURIComponent('${encodedRunId}'), decodeURIComponent('${encodedName}'))">
           <div>
             <div class="name">${title}</div>
             <div class="meta">${meta}</div>
           </div>
           <div class="quiz-item-actions">
-            <button class="btn btn-small btn-success" onclick="event.stopPropagation(); downloadResultsCsvForQuiz(${q.quizDbId}, '${String(q.quizName || "").replace(/'/g, "\\'")}')">Сохранить в CSV</button>
-            <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteResultsForQuiz(${q.quizDbId}, '${String(q.quizName || "").replace(/'/g, "\\'")}')">Удалить</button>
+            <button class="btn btn-small btn-success" onclick="event.stopPropagation(); downloadResultsXlsxForQuiz(${Number(q.quizDbId)}, decodeURIComponent('${encodedRunId}'))">Сохранить XLSX</button>
+            <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteResultsForQuiz(${Number(q.quizDbId)}, decodeURIComponent('${encodedRunId}'), decodeURIComponent('${encodedName}'))">Удалить</button>
           </div>
         </div>
       `;
@@ -283,23 +96,21 @@ function renderCompletedQuizzes(list) {
     .join("");
 }
 
-/**
- * Выбор викторины в списке и загрузка её прохождений.
- * @param {number} quizDbId
- * @param {string} quizName
- */
-function selectResultsQuiz(quizDbId, quizName) {
+function selectResultsQuiz(quizDbId, runId, quizName) {
   const id = Number(quizDbId);
-  const isSame = selectedResultsQuizDbId != null && selectedResultsQuizDbId === id;
+  const normalizedRunId = String(runId || "");
+  const isSame =
+    selectedResultsQuizDbId != null &&
+    selectedResultsQuizDbId === id &&
+    selectedResultsRunId === normalizedRunId;
 
-  // Повторный клик по активной викторине — свернуть список
   if (isSame) {
     selectedResultsQuizDbId = null;
+    selectedResultsRunId = "";
     selectedResultsQuizName = "";
     window.__lastQuizResultsPayload = null;
     const wrap = document.getElementById("results-table-wrap");
     if (wrap) wrap.innerHTML = "";
-    // Снимем подсветку active без перезапроса к серверу
     if (typeof window.__lastResultsQuizzesList !== "undefined") {
       renderCompletedQuizzes(window.__lastResultsQuizzesList);
     }
@@ -307,47 +118,43 @@ function selectResultsQuiz(quizDbId, quizName) {
   }
 
   selectedResultsQuizDbId = id;
+  selectedResultsRunId = normalizedRunId;
   selectedResultsQuizName = quizName || "";
 
-  socket.emit("get-quiz-results-by-db", { quizDbId: selectedResultsQuizDbId });
+  socket.emit("get-quiz-results-by-db", {
+    quizDbId: selectedResultsQuizDbId,
+    runId: selectedResultsRunId,
+  });
 }
 
-/**
- * Запустить скачивание CSV по конкретной викторине.
- * @param {number} quizDbId
- * @param {string} quizName
- */
-function downloadResultsCsvForQuiz(quizDbId, quizName) {
+function downloadResultsXlsxForQuiz(quizDbId, runId) {
   const id = Number(quizDbId);
   if (!Number.isFinite(id) || id <= 0) return;
-  selectedResultsQuizDbId = id;
-  selectedResultsQuizName = quizName || "";
-  pendingCsvDownloadQuizDbId = id;
-  socket.emit("get-quiz-results-by-db", { quizDbId: id });
+  socket.emit("download-results-xlsx", {
+    quizDbId: id,
+    runId: String(runId || ""),
+  });
 }
 
-/**
- * Удалить историю конкретной викторины.
- * @param {number} quizDbId
- * @param {string} quizName
- */
-function deleteResultsForQuiz(quizDbId, quizName) {
+function deleteResultsForQuiz(quizDbId, runId, quizName) {
   const id = Number(quizDbId);
   if (!Number.isFinite(id) || id <= 0) return;
   const name = quizName || `ID ${id}`;
   if (
     !confirm(
-      `Удалить все сохранённые прохождения для «${name}»? Это действие нельзя отменить.`,
+      `Удалить сохранённые прохождения для «${name}»? Это действие нельзя отменить.`,
     )
   ) {
     return;
   }
-  // если сейчас открыта эта викторина — очистим таблицу сразу
-  if (selectedResultsQuizDbId === id) {
+  if (selectedResultsQuizDbId === id && selectedResultsRunId === String(runId || "")) {
     const wrap = document.getElementById("results-table-wrap");
     if (wrap) wrap.innerHTML = "";
   }
-  socket.emit("delete-quiz-results-by-db", { quizDbId: id });
+  socket.emit("delete-quiz-results-by-db", {
+    quizDbId: id,
+    runId: String(runId || ""),
+  });
 }
 
 socket.on("results-quizzes", (data) => {
@@ -359,32 +166,62 @@ socket.on("results-quizzes", (data) => {
   window.__lastResultsQuizzesList = (data && data.quizzes) || [];
   renderCompletedQuizzes(window.__lastResultsQuizzesList);
 
-  // Авто-раскрытие викторины после завершения игры
   const pendingId = window.__pendingAutoOpenResultsQuizDbId;
   if (pendingId != null) {
-    const found = window.__lastResultsQuizzesList.find(
-      (q) => Number(q.quizDbId) === Number(pendingId),
-    );
+    const pendingRunId = String(window.__pendingAutoOpenResultsRunId || "");
+    const found =
+      window.__lastResultsQuizzesList.find(
+        (q) =>
+          Number(q.quizDbId) === Number(pendingId) &&
+          (!pendingRunId || String(q.runId || "") === pendingRunId),
+      ) ||
+      window.__lastResultsQuizzesList.find(
+        (q) => Number(q.quizDbId) === Number(pendingId),
+      );
     if (found) {
       const pendingName =
         typeof window.__pendingAutoOpenResultsQuizName === "string"
           ? window.__pendingAutoOpenResultsQuizName
           : "";
       window.__pendingAutoOpenResultsQuizDbId = null;
+      window.__pendingAutoOpenResultsRunId = null;
       window.__pendingAutoOpenResultsQuizName = null;
-      selectResultsQuiz(Number(found.quizDbId), pendingName || found.quizName || "");
+      selectResultsQuiz(
+        Number(found.quizDbId),
+        found.runId || "",
+        pendingName || found.quizName || "",
+      );
     }
   }
 });
 
 socket.on("quiz-results-deleted", (data) => {
   selectedResultsQuizDbId = null;
+  selectedResultsRunId = "";
   selectedResultsQuizName = "";
   const wrap = document.getElementById("results-table-wrap");
   if (wrap) wrap.innerHTML = "";
   window.__lastQuizResultsPayload = null;
   if (data?.message) alert(data.message);
   loadResultsOverview();
+});
+
+socket.on("quiz-results-xlsx", (data) => {
+  if (data?.error) {
+    alert(data.error);
+    return;
+  }
+  if (!data?.base64) return;
+
+  const bytes = Uint8Array.from(atob(data.base64), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = data.filename || "results.xlsx";
+  link.click();
+  URL.revokeObjectURL(link.href);
 });
 
 // При первом заходе на вкладку «Результаты» подхватится через showTab()
